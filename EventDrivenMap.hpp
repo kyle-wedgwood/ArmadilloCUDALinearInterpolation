@@ -1,0 +1,137 @@
+#ifndef EVENTDRIVEMAPHEADERDEF
+#define EVENTDRIVEMAPHEADERDEF
+
+#include <cmath>
+#include <armadillo>
+#include <curand.h>
+#include <cassert>
+#include "AbstractNonlinearProblem.hpp"
+#include "AbstractNonlinearProblemJacobian.hpp"
+
+class EventDrivenMap:
+  public AbstractNonlinearProblem
+{
+
+  public:
+
+    // Specialised constructor
+    EventDrivenMap( const arma::vec* pParameters, unsigned int noReal);
+
+    // Destructor
+    ~EventDrivenMap();
+
+    // Right-hand side
+    void ComputeF( const arma::vec& u, arma::vec& f);
+
+    // Equation-free stuff
+    void SetTimeHorizon( const float T);
+
+    // CUDA stuff
+    // Change number of realisations
+    void SetNoRealisations( const int noReal);
+
+    // Set variance
+    void SetParameterStdDev( const float sigma);
+
+    // Set parameter
+    void SetParameters( const unsigned int parId, const float parVal);
+
+    // Reset seed
+    void ResetSeed();
+
+    // Structure to store firing times and indices */
+    struct __align__(8) firing{
+      float time;
+      unsigned int index;
+    };
+
+  private:
+
+    // Hiding default constructor
+    EventDrivenMap();
+
+    // Float vector for temporary storage
+    arma::fvec* mpU;
+    arma::fvec* mpF;
+
+    // Float vector for parameters
+    arma::fvec* mpHost_p;
+
+    // Integration time
+    float mFinalTime;
+
+    // threads & blocks
+    unsigned int mNoReal;
+    unsigned int mNoThreads;
+    unsigned int mNoBlocks;
+    unsigned int mNoSpikes;
+
+    // CPU variables
+    unsigned short *mpHost_lastSpikeInd;
+
+    // GPU variables
+    float *mpDev_p;
+    float *mpDev_beta;
+    float *mpDev_v;
+    float *mpDev_s;
+    float *mpDev_w;
+    float *mpDev_U;
+    float *mpDev_lastSpikeTime;
+    float *mpDev_crossedSpikeTime;
+    unsigned short *mpDev_lastSpikeInd;
+    unsigned short *mpDev_crossedSpikeInd;
+
+    curandGenerator_t mGen; // random number generator
+    float mParStdDev;
+
+    // Functions to do lifting
+    void initialSpikeInd( const arma::vec& U);
+
+    void ZtoU( const arma::vec& Z, arma::vec& U);
+
+    void UtoZ( const arma::vec *U, arma::vec *Z);
+
+    void BuildCouplingKernel();
+};
+
+__global__ void LiftKernel( float *s, float *v, const float *par, const float *U,
+    const unsigned int noReal);
+
+// Functions to find spike time
+__device__ float fun( float t, float v, float s, float beta);
+
+__device__ float dfun( float t, float v, float s, float beta);
+
+__device__ float eventTime( float v0, float s0, float beta);
+
+// evolution
+__global__ void EvolveKernel( float *v, float *s, const float *beta,
+    const float *w, const float finalTime, unsigned short *global_lastSpikeInd,
+    float *global_lastFiringTime, unsigned short *global_crossedSpikeInd,
+    float *global_crossedFiringTime, unsigned int noReal);
+
+// restriction
+__global__ void RestrictKernel( float *global_lastSpikeTime,
+                                const unsigned short *global_lastSpikeInd,
+                                const float *global_crossedSpikeTime,
+                                const unsigned short *global_crossedSpikeInd,
+                                const float finalTime,
+                                const unsigned int noReal);
+
+// averaging functions
+__global__ void realisationReductionKernelBlocks( float *dev_V,
+                                                  const float *dev_U,
+                                                  const unsigned int noReal);
+
+// helper functions
+__global__ void initialSpikeIndCopyKernel( unsigned short* pLastSpikeInd, const unsigned int noReal);
+
+void circshift( float *w, int shift);
+__device__ struct EventDrivenMap::firing warpReduceMin( struct EventDrivenMap::firing val);
+__device__ struct EventDrivenMap::firing blockReduceMin( struct EventDrivenMap::firing val);
+__device__ float warpReduceSum ( float val);
+__device__ float blockReduceSum( float val);
+
+void SaveData( int npts, float *x, char *filename);
+
+#endif
