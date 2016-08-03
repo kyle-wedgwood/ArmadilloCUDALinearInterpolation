@@ -1,0 +1,1 @@
+nvcc -x cu --std=c++11 test.cu -larmadillo -L/usr/local/lib -o test.out
