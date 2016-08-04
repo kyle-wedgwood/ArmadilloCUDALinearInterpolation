@@ -67,6 +67,8 @@ class NewtonSolver:
     // Accessor for jacobian
     void SetProblemJacobian(AbstractNonlinearProblemJacobian* pProblemJacobian);
 
+    void PostProcess();
+
   private:
 
     // Hide default constructor
