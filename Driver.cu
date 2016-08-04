@@ -62,9 +62,19 @@ int main(int argc, char* argv[])
   p_newton_solver_1->SetInitialGuess(p_solution_old);
   p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
 
+  /*
   printf("Homogeneous Solution = \n");
   std::cout << *p_solution_new << std::endl;
 
+  printf("Setting NoReal = 100\n");
+  p_event->SetNoRealisations(100);
+  p_event->ComputeF(*p_solution_old,*p_test_sol);
+
+  printf("Homogeneous Solution = \n");
+  std::cout << *p_solution_new << std::endl;
+  */
+
+  /*
   float sigma = 1.0f;
   p_event->SetParameterStdDev(sigma);
   printf("Setting parameter standard deviation to %f\n",sigma);
@@ -72,6 +82,7 @@ int main(int argc, char* argv[])
   p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
   printf("Heterogeneous Solution = \n");
   std::cout << *p_solution_new << std::endl;
+  */
 
   /*
   // Now loop over steps

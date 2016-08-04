@@ -1,0 +1,10 @@
+test*
+MakefilBackup
+CUDANonlinearProblem*
+Fold*
+nvcc
+Makefile.text
+MakefileAlt
+eventDrivenMapOld.cu
+DriverOld.cu
+

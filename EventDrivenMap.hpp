@@ -42,6 +42,9 @@ class EventDrivenMap:
     // Post process data
     void PostProcess();
 
+    // Toggle debug flag
+    void SetDebugFlag( const bool val);
+
     // Structure to store firing times and indices */
     struct __align__(8) firing{
       float time;
@@ -96,6 +99,17 @@ class EventDrivenMap:
     void UtoZ( const arma::vec *U, arma::vec *Z);
 
     void BuildCouplingKernel();
+
+    // For debugging purposes
+    bool mDebugFlag;
+
+    void SaveInitialSpikeInd();
+
+    void SaveLift();
+
+    void SaveEvolve();
+
+    void SaveRestrict();
 };
 
 __global__ void LiftKernel( float *s, float *v, const float *par, const float *U,
