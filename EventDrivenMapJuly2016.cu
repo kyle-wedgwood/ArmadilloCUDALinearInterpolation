@@ -61,6 +61,9 @@ EventDrivenMap::EventDrivenMap(const arma::vec* pParameters, unsigned int noReal
   mpHost_p = new arma::fvec((*pParameters).n_elem);
   *mpHost_p = arma::conv_to<arma::fvec>::from(*pParameters);
 
+  // TEST
+  printf("Host beta = %f\n",(*mpHost_p)[0]);
+
   // Declare memory for temporary storage of U and F
   mpU = new arma::fvec(noSpikes);
   mpF = new arma::fvec(noSpikes);
@@ -102,9 +105,6 @@ EventDrivenMap::EventDrivenMap(const arma::vec* pParameters, unsigned int noReal
   CURAND_CALL( curandCreateGenerator( &mGen, CURAND_RNG_PSEUDO_DEFAULT));
   ResetSeed();
   mParStdDev = 0.0f;
-
-  // Set debug flag
-  mDebugFlag = 0;
 }
 
 void EventDrivenMap::BuildCouplingKernel()
@@ -158,65 +158,135 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
 
   // First generate initial spike indices
   initialSpikeInd( Z);
+  printf("Initial spike indices = \n");
+  for (int i=0;i<noSpikes;++i)
+  {
+    printf("%d\n",mpHost_lastSpikeInd[i]);
+  }
+  unsigned short* mpHost_lastSpikeIndBig;
+  mpHost_lastSpikeIndBig = (unsigned short*) malloc(
+      mNoReal*noSpikes*sizeof(short));
+  CUDA_CALL( cudaMemcpy( mpHost_lastSpikeIndBig, mpDev_lastSpikeInd,
+        mNoReal*noSpikes*sizeof(short), cudaMemcpyDeviceToHost));
+  FILE *fp = fopen("testInitLastSpikeInd.dat","w");
+  for (int i=0;i<mNoReal*noSpikes;++i)
+  {
+    fprintf(fp,"%f\n",(float) mpHost_lastSpikeIndBig[i]);
+  }
+  fclose(fp);
 
   // Then, put vector in correct form
   ZtoU(Z,U0);
 
+  printf("U0 = \n");
+  std::cout << U0 << std::endl;
+
   // Then, typecast data as floats
   fU = arma::conv_to<arma::fvec>::from(U0);
+
+  printf("Initial fU = \n");
+  std::cout << fU << std::endl;
 
   // Assuming that weight kernel does not change
   CUDA_CALL( cudaMemcpy(mpDev_U,fU.begin(),(noSpikes+1)*sizeof(float),cudaMemcpyHostToDevice));
 
   // Introduce parameters heterogeneity
-  ResetSeed();
   CURAND_CALL( curandGenerateNormal( mGen, mpDev_beta, mNoReal*mNoThreads, (*mpHost_p)[0], mParStdDev));
-  if (mDebugFlag)
-  {
-    SaveInitialSpikeInd();
-  }
 
   // Lift - working
   LiftKernel<<<mNoReal,mNoThreads>>>(mpDev_s,mpDev_v,mpDev_p,mpDev_U,mNoReal);
   CUDA_CHECK_ERROR();
-  if (mDebugFlag)
+  float *mpHost_Lift;
+  mpHost_Lift = (float*) malloc( 2*mNoThreads*sizeof(float));
+  CUDA_CALL( cudaMemcpy( mpHost_Lift,mpDev_v,mNoThreads*sizeof(float),cudaMemcpyDeviceToHost));
+  CUDA_CALL( cudaMemcpy( mpHost_Lift+mNoThreads,mpDev_s,mNoThreads*sizeof(float),cudaMemcpyDeviceToHost));
+
+  fp = fopen("testLift.dat","w");
+  for (int i=0;i<mNoThreads;++i)
   {
-    SaveLift();
+    fprintf(fp,"%f\t%f\n",mpHost_Lift[i],mpHost_Lift[i+mNoThreads]);
   }
+  fclose(fp);
+  printf("First line of lift: %f \t %f \n",mpHost_Lift[0],mpHost_Lift[mNoThreads]);
+  free(mpHost_Lift);
 
   // Copy data to GPU
   //cudaMemcpy( dev_w, w, mNoThreads*sizeof(float), cudaMemcpyHostToDevice );
 
   // Evolve
+  printf("Time horizon = %f\n",mFinalTime);
+  float par_val;
+  CUDA_CALL( cudaMemcpy(&par_val,mpDev_p,sizeof(float),cudaMemcpyDeviceToHost));
+  printf("Device beta = %f\n",par_val);
   EvolveKernel<<<mNoReal,mNoThreads>>>(mpDev_v,mpDev_s,mpDev_beta,mpDev_w,mFinalTime,mpDev_lastSpikeInd,mpDev_lastSpikeTime,
       mpDev_crossedSpikeInd,mpDev_crossedSpikeTime,mNoReal);
   CUDA_CHECK_ERROR();
-  if (mDebugFlag)
+  printf("Evolve kernel started.\n");
+
+  unsigned short *mpHost_spikeInd;
+  float *mpHost_spikeTime;
+  mpHost_spikeInd = (unsigned short*) malloc( noSpikes*mNoReal*sizeof(short));
+  mpHost_spikeTime = (float*) malloc( noSpikes*mNoReal*sizeof(float));
+
+  char filename1[] = "testLastSpikeInd.dat";
+  char filename2[] = "testLastSpikeTime.dat";
+  char filename3[] = "testCrossedSpikeInd.dat";
+  char filename4[] = "testCrossedSpikeTime.dat";
+
+  CUDA_CALL( cudaMemcpy( mpHost_spikeInd, mpDev_lastSpikeInd, noSpikes*mNoReal*sizeof(unsigned short), cudaMemcpyDeviceToHost));
+  CUDA_CALL( cudaMemcpy( mpHost_spikeTime, mpDev_lastSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost));
+
+  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename2);
+  for (int i=0;i<noSpikes*mNoReal;i++)
   {
-    SaveEvolve();
+    mpHost_spikeTime[i] = (float)mpHost_spikeInd[i];
   }
+  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename1);
+
+  CUDA_CALL( cudaMemcpy( mpHost_spikeInd, mpDev_crossedSpikeInd, noSpikes*mNoReal*sizeof(unsigned short), cudaMemcpyDeviceToHost));
+  CUDA_CALL( cudaMemcpy( mpHost_spikeTime, mpDev_crossedSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost));
+
+  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename4);
+  for (int i=0;i<noSpikes*mNoReal;i++)
+  {
+    mpHost_spikeTime[i] = (float)mpHost_spikeInd[i];
+  }
+  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename3);
+
+  free(mpHost_spikeInd);
+  free(mpHost_spikeTime);
 
   // Restrict
   RestrictKernel<<<noSpikes*mNoReal,mNoThreads>>>( mpDev_lastSpikeTime, mpDev_lastSpikeInd,
       mpDev_crossedSpikeTime, mpDev_crossedSpikeInd, mFinalTime, mNoReal);
   CUDA_CHECK_ERROR();
-  if (mDebugFlag)
-  {
-    SaveRestrict();
-  }
+
+  char filename5[] = "testAverages.dat";
+  float* mpHost_averages;
+  mpHost_averages = (float*) malloc( noSpikes*mNoReal*sizeof(float));
+  cudaMemcpy( mpHost_averages, mpDev_lastSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost);
+  SaveData( noSpikes*mNoReal,mpHost_averages,filename5);
+  free(mpHost_averages);
 
   realisationReductionKernelBlocks<<<noSpikes,mNoThreads>>>(
       mpDev_U, mpDev_lastSpikeTime, mNoReal);
   CUDA_CHECK_ERROR();
 
+  printf("Averaging done.\n");
+
   // Copy data back to CPU
   fU.resize(noSpikes);
   CUDA_CALL( cudaMemcpy( fU.begin(), mpDev_U, noSpikes*sizeof(float), cudaMemcpyDeviceToHost ));
+
+  printf("Final fU = \n");
+  std::cout << fU << std::endl;
 
   // Compute F
   UT = arma::conv_to<arma::vec>::from(fU);
 
   f = -U0[0]*U0.rows(1,noSpikes) - UT + U0[0]*mFinalTime;
+  printf("f = \n");
+  std::cout << f << std::endl;
 }
 
 void EventDrivenMap::SetTimeHorizon( const float T)
@@ -229,28 +299,6 @@ void EventDrivenMap::SetNoRealisations( const int noReal)
 {
   assert(noReal>0);
   mNoReal = noReal;
-
-  // Free up memory
-  cudaFree( mpDev_beta);
-  cudaFree( mpDev_v);
-  cudaFree( mpDev_s);
-  cudaFree( mpDev_lastSpikeInd);
-  cudaFree( mpDev_lastSpikeTime);
-  cudaFree( mpDev_crossedSpikeInd);
-  cudaFree( mpDev_crossedSpikeTime);
-
-  // Then reallocate
-  CUDA_CALL( cudaMalloc( &mpDev_beta, mNoReal*mNoThreads*sizeof(float) ));
-  CUDA_CALL( cudaMalloc( &mpDev_v, mNoReal*mNoThreads*sizeof(float) ));
-  CUDA_CALL( cudaMalloc( &mpDev_s, mNoReal*mNoThreads*sizeof(float) ));
-  CUDA_CALL( cudaMalloc( &mpDev_lastSpikeInd,
-        mNoReal*noSpikes*sizeof(unsigned short) ));
-  CUDA_CALL( cudaMalloc( &mpDev_lastSpikeTime, mNoReal*noSpikes*sizeof(float)
-        ));
-  CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeInd,
-        mNoReal*noSpikes*sizeof(unsigned short) ));
-  CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeTime,
-        mNoReal*noSpikes*sizeof(float) ));
 }
 
 void EventDrivenMap::SetParameterStdDev( const float sigma)
@@ -268,17 +316,7 @@ void EventDrivenMap::SetParameters( const unsigned int parId, const float parVal
 
 void EventDrivenMap::ResetSeed()
 {
-  CURAND_CALL( curandSetPseudoRandomGeneratorSeed( mGen, mSeed));
-}
-
-void EventDrivenMap::PostProcess()
-{
-  mSeed = (unsigned long long) clock();
-}
-
-void EventDrivenMap::SetDebugFlag( const bool val)
-{
-  mDebugFlag = val;
+  CURAND_CALL( curandSetPseudoRandomGeneratorSeed( mGen, (unsigned long long) clock() ));
 }
 
 void EventDrivenMap::initialSpikeInd( const arma::vec& U)
@@ -324,84 +362,6 @@ void EventDrivenMap::UtoZ( const arma::vec *U, arma::vec *Z)
   for (int i=1;i<noSpikes;i++) {
     Z[i] = U[i+1];
   }
-}
-
-void EventDrivenMap::SaveInitialSpikeInd()
-{
-  unsigned short* mpHost_lastSpikeIndBig;
-  mpHost_lastSpikeIndBig = (unsigned short*) malloc(
-      mNoReal*noSpikes*sizeof(short));
-  CUDA_CALL( cudaMemcpy( mpHost_lastSpikeIndBig, mpDev_lastSpikeInd,
-        mNoReal*noSpikes*sizeof(short), cudaMemcpyDeviceToHost));
-  FILE *fp = fopen("testInitLastSpikeInd.dat","w");
-  for (int i=0;i<mNoReal*noSpikes;++i)
-  {
-    fprintf(fp,"%f\n",(float) mpHost_lastSpikeIndBig[i]);
-  }
-  fclose(fp);
-  free(mpHost_lastSpikeIndBig);
-}
-
-void EventDrivenMap::SaveLift()
-{
-  float* mpHost_Lift;
-  mpHost_Lift = (float*) malloc( 2*mNoReal*mNoThreads*sizeof(float));
-  CUDA_CALL( cudaMemcpy( mpHost_Lift,mpDev_v,mNoReal*mNoThreads*sizeof(float),cudaMemcpyDeviceToHost));
-  CUDA_CALL( cudaMemcpy( mpHost_Lift+mNoReal*mNoThreads,mpDev_s,mNoReal*mNoThreads*sizeof(float),cudaMemcpyDeviceToHost));
-
-  FILE *fp = fopen("testLift.dat","w");
-  for (int i=0;i<mNoReal*mNoThreads;++i)
-  {
-    fprintf(fp,"%f\t%f\n",mpHost_Lift[i],mpHost_Lift[i+mNoReal*mNoThreads]);
-  }
-  fclose(fp);
-  free(mpHost_Lift);
-}
-
-void EventDrivenMap::SaveEvolve()
-{
-  unsigned short *mpHost_spikeInd;
-  float* mpHost_spikeTime;
-  mpHost_spikeInd = (unsigned short*) malloc( noSpikes*mNoReal*sizeof(short));
-  mpHost_spikeTime = (float*) malloc( noSpikes*mNoReal*sizeof(float));
-
-  char filename1[] = "testLastSpikeInd.dat";
-  char filename2[] = "testLastSpikeTime.dat";
-  char filename3[] = "testCrossedSpikeInd.dat";
-  char filename4[] = "testCrossedSpikeTime.dat";
-
-  CUDA_CALL( cudaMemcpy( mpHost_spikeInd, mpDev_lastSpikeInd, noSpikes*mNoReal*sizeof(unsigned short), cudaMemcpyDeviceToHost));
-  CUDA_CALL( cudaMemcpy( mpHost_spikeTime, mpDev_lastSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost));
-
-  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename2);
-  for (int i=0;i<noSpikes*mNoReal;i++)
-  {
-    mpHost_spikeTime[i] = (float)mpHost_spikeInd[i];
-  }
-  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename1);
-
-  CUDA_CALL( cudaMemcpy( mpHost_spikeInd, mpDev_crossedSpikeInd, noSpikes*mNoReal*sizeof(unsigned short), cudaMemcpyDeviceToHost));
-  CUDA_CALL( cudaMemcpy( mpHost_spikeTime, mpDev_crossedSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost));
-
-  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename4);
-  for (int i=0;i<noSpikes*mNoReal;i++)
-  {
-    mpHost_spikeTime[i] = (float)mpHost_spikeInd[i];
-  }
-  SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename3);
-
-  free(mpHost_spikeInd);
-  free(mpHost_spikeTime);
-}
-
-void EventDrivenMap::SaveRestrict()
-{
-  char filename[] = "testAverages.dat";
-  float* mpHost_averages;
-  mpHost_averages = (float*) malloc( noSpikes*mNoReal*sizeof(float));
-  cudaMemcpy( mpHost_averages, mpDev_lastSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost);
-  SaveData( noSpikes*mNoReal,mpHost_averages,filename);
-  free(mpHost_averages);
 }
 
 __global__ void LiftKernel( float *S, float *v, const float *par, const float *U,
@@ -482,6 +442,7 @@ __global__ void EvolveKernel( float *v, float *s, const float *beta,
   __shared__ float local_lastSpikeTime[noSpikes];
   __shared__ float local_crossedSpikeTime[noSpikes];
   __shared__ unsigned int noCrossed;
+  __shared__ bool crossings[noSpikes];
   float currentTime = 0.0f;
   float local_v, local_s, local_beta;
   unsigned short minIndex;
@@ -496,9 +457,10 @@ __global__ void EvolveKernel( float *v, float *s, const float *beta,
   {
     local_lastSpikeInd[threadIdx.x] =
       global_lastSpikeInd[threadIdx.x*noReal+blockIdx.x];
+    crossings[threadIdx.x] = false;
   }
   noCrossed = 0;
-  while (noCrossed<(1<<noSpikes)-1)
+  while (noCrossed<noSpikes)
   {
     // find next firing times
     val.time  = eventTime(local_v,local_s,local_beta);
@@ -527,13 +489,14 @@ __global__ void EvolveKernel( float *v, float *s, const float *beta,
       {
         minIndex += ((std::abs((int)(val.index-local_lastSpikeInd[i])))<(std::abs((int)(val.index-local_lastSpikeInd[minIndex]))));
       }
-      if (!(noCrossed & (1<<minIndex)))
+      if (!crossings[minIndex])
       {
         if (currentTime>finalTime)
         {
           local_crossedSpikeTime[minIndex] = currentTime;
           local_crossedSpikeInd[minIndex]  = val.index;
-          noCrossed += (1<<minIndex);
+          crossings[minIndex] = true;
+          noCrossed += 1;
         }
         else
         {
