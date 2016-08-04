@@ -30,6 +30,8 @@ class EventDrivenMap:
     // Change number of realisations
     void SetNoRealisations( const int noReal);
 
+    void SetNoThreads( const int noThreads);
+
     // Set variance
     void SetParameterStdDev( const float sigma);
 
@@ -144,7 +146,7 @@ __global__ void realisationReductionKernelBlocks( float *dev_V,
 // helper functions
 __global__ void initialSpikeIndCopyKernel( unsigned short* pLastSpikeInd, const unsigned int noReal);
 
-void circshift( float *w, int shift);
+void circshift( float *w, int shift, unsigned int noThreads);
 __device__ struct EventDrivenMap::firing warpReduceMin( struct EventDrivenMap::firing val);
 __device__ struct EventDrivenMap::firing blockReduceMin( struct EventDrivenMap::firing val);
 __device__ float warpReduceSum ( float val);

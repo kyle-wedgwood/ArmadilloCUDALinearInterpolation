@@ -9,7 +9,6 @@
 #define tol 1e-6
 
 // CUDA stuff - note that some of the source code uses mNoThreads as well
-#define noThreads 1024
 #define noSpikes 3
 
 // Time horizon

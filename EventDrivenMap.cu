@@ -67,7 +67,7 @@ EventDrivenMap::EventDrivenMap(const arma::vec* pParameters, unsigned int noReal
 
   // CUDA stuff
   mNoReal    = noReal;
-  mNoThreads = noThreads;
+  mNoThreads = 1024;
   mNoBlocks  = (mNoReal+mNoThreads-1)/mNoThreads;
 
   // Set initial time horizon
@@ -116,7 +116,7 @@ void EventDrivenMap::BuildCouplingKernel()
     float x = -L + (float)(2*L/mNoThreads)*i;
     w[i] = (a1*exp(-b1*abs(x))-a2*exp(-b2*abs(x)))*2*L/mNoThreads;
   }
-  circshift(w,mNoThreads/2);
+  circshift(w,mNoThreads/2,mNoThreads);
   CUDA_CALL( cudaMemcpy(mpDev_w,w,mNoThreads*sizeof(float),cudaMemcpyHostToDevice));
   FILE *fp = fopen("test.dat","w");
   for (int i=0;i<mNoThreads;++i)
@@ -158,6 +158,10 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
 
   // First generate initial spike indices
   initialSpikeInd( Z);
+  if (mDebugFlag)
+  {
+    SaveInitialSpikeInd();
+  }
 
   // Then, put vector in correct form
   ZtoU(Z,U0);
@@ -171,10 +175,6 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   // Introduce parameters heterogeneity
   ResetSeed();
   CURAND_CALL( curandGenerateNormal( mGen, mpDev_beta, mNoReal*mNoThreads, (*mpHost_p)[0], mParStdDev));
-  if (mDebugFlag)
-  {
-    SaveInitialSpikeInd();
-  }
 
   // Lift - working
   LiftKernel<<<mNoReal,mNoThreads>>>(mpDev_s,mpDev_v,mpDev_p,mpDev_U,mNoReal);
@@ -229,6 +229,7 @@ void EventDrivenMap::SetNoRealisations( const int noReal)
 {
   assert(noReal>0);
   mNoReal = noReal;
+  mNoBlocks  = (mNoReal+mNoThreads-1)/mNoThreads;
 
   // Free up memory
   cudaFree( mpDev_beta);
@@ -251,6 +252,39 @@ void EventDrivenMap::SetNoRealisations( const int noReal)
         mNoReal*noSpikes*sizeof(unsigned short) ));
   CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeTime,
         mNoReal*noSpikes*sizeof(float) ));
+}
+
+void EventDrivenMap::SetNoThreads( const int noThreads)
+{
+  assert(noThreads>0);
+  assert(noThreads<1024);
+  mNoThreads = noThreads;
+  mNoBlocks  = (mNoReal+mNoThreads-1)/mNoThreads;
+
+  // Free up memory
+  cudaFree( mpDev_beta);
+  cudaFree( mpDev_v);
+  cudaFree( mpDev_s);
+  cudaFree( mpDev_lastSpikeInd);
+  cudaFree( mpDev_lastSpikeTime);
+  cudaFree( mpDev_crossedSpikeInd);
+  cudaFree( mpDev_crossedSpikeTime);
+
+  // Then reallocate
+  CUDA_CALL( cudaMalloc( &mpDev_beta, mNoReal*mNoThreads*sizeof(float) ));
+  CUDA_CALL( cudaMalloc( &mpDev_v, mNoReal*mNoThreads*sizeof(float) ));
+  CUDA_CALL( cudaMalloc( &mpDev_s, mNoReal*mNoThreads*sizeof(float) ));
+  CUDA_CALL( cudaMalloc( &mpDev_lastSpikeInd,
+        mNoReal*noSpikes*sizeof(unsigned short) ));
+  CUDA_CALL( cudaMalloc( &mpDev_lastSpikeTime, mNoReal*noSpikes*sizeof(float)
+        ));
+  CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeInd,
+        mNoReal*noSpikes*sizeof(unsigned short) ));
+  CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeTime,
+        mNoReal*noSpikes*sizeof(float) ));
+
+  // Rebuild coupling kernel
+  BuildCouplingKernel();
 }
 
 void EventDrivenMap::SetParameterStdDev( const float sigma)
@@ -409,10 +443,10 @@ __global__ void LiftKernel( float *S, float *v, const float *par, const float *U
 {
   int k = threadIdx.x + blockIdx.x*blockDim.x;
   int m;
-  if(k<noThreads*noReal){
+  if(k<blockDim.x*noReal){
 
     //Define x-array
-    float x = L - (float)(2*L/noThreads)*threadIdx.x;
+    float x = L - (float)(2*L/blockDim.x)*threadIdx.x;
     float s = 0.0f;
     float c = U[0];
     float beta = par[0];
@@ -674,8 +708,8 @@ __global__ void RestrictKernel( float *global_lastSpikeTime,
   {
     float t0 = global_lastSpikeTime[index];
     float t1 = global_crossedSpikeTime[index];
-    float x0 = -L+2.0f*L/noThreads*global_lastSpikeInd[index];
-    float x1 = -L+2.0f*L/noThreads*global_crossedSpikeInd[index];
+    float x0 = -L+2.0f*L/blockDim.x*global_lastSpikeInd[index];
+    float x1 = -L+2.0f*L/blockDim.x*global_crossedSpikeInd[index];
     global_lastSpikeTime[index] = x0+(finalTime-t0)*(x1-x0)/(t1-t0);
   }
 }
@@ -700,7 +734,7 @@ __global__ void realisationReductionKernelBlocks( float *V,
   }
 }
 
-void circshift( float *w, int shift) {
+void circshift( float *w, int shift, unsigned int noThreads) {
   int i;
   float dummy[noThreads];
   # pragma unroll
@@ -741,7 +775,7 @@ __device__ struct EventDrivenMap::firing blockReduceMin( struct EventDrivenMap::
   }
   __syncthreads();
 
-  val.time  = (threadIdx.x<blockDim.x/warpSize) ? shared[lane].time  : 0.0f;
+  val.time  = (threadIdx.x<blockDim.x/warpSize) ? shared[lane].time  : 100.0f;
   val.index = (threadIdx.x<blockDim.x/warpSize) ? shared[lane].index : 0;
 
   if (wid==0) {
