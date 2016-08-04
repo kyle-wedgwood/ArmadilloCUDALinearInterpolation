@@ -39,6 +39,9 @@ class EventDrivenMap:
     // Reset seed
     void ResetSeed();
 
+    // Post process data
+    void PostProcess();
+
     // Structure to store firing times and indices */
     struct __align__(8) firing{
       float time;
@@ -82,6 +85,7 @@ class EventDrivenMap:
     unsigned short *mpDev_crossedSpikeInd;
 
     curandGenerator_t mGen; // random number generator
+    unsigned long long mSeed; // seed for RNG
     float mParStdDev;
 
     // Functions to do lifting

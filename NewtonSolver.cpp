@@ -127,6 +127,9 @@ void NewtonSolver::Solve(arma::vec& solution,
 
   }
 
+  // Post process
+  PostProcess();
+
   // Trim residual history
   residualHistory.head(iteration);
 
@@ -236,3 +239,7 @@ void NewtonSolver::Initialise()
 
 }
 
+void NewtonSolver::PostProcess()
+{
+  mpProblem->PostProcess();
+}

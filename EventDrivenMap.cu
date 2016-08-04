@@ -166,6 +166,7 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   CUDA_CALL( cudaMemcpy(mpDev_U,fU.begin(),(noSpikes+1)*sizeof(float),cudaMemcpyHostToDevice));
 
   // Introduce parameters heterogeneity
+  ResetSeed();
   CURAND_CALL( curandGenerateNormal( mGen, mpDev_beta, mNoReal*mNoThreads, (*mpHost_p)[0], mParStdDev));
 
   // Lift - working
@@ -226,7 +227,12 @@ void EventDrivenMap::SetParameters( const unsigned int parId, const float parVal
 
 void EventDrivenMap::ResetSeed()
 {
-  CURAND_CALL( curandSetPseudoRandomGeneratorSeed( mGen, (unsigned long long) clock() ));
+  CURAND_CALL( curandSetPseudoRandomGeneratorSeed( mGen, mSeed));
+}
+
+void EventDrivenMap::PostProcess()
+{
+  mSeed = (unsigned long long) clock();
 }
 
 void EventDrivenMap::initialSpikeInd( const arma::vec& U)
