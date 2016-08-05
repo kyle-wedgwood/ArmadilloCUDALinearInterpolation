@@ -18,6 +18,7 @@ int main(int argc, char* argv[])
   // Instantiate problem
   unsigned int noReal = 1000;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
+  p_event->SetParameterStdDev(0.5);
 
   // Initial guess
   arma::vec* p_solution_old = new arma::vec(noSpikes);
