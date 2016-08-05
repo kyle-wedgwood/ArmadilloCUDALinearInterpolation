@@ -100,7 +100,7 @@ EventDrivenMap::EventDrivenMap(const arma::vec* pParameters, unsigned int noReal
 
   // initialise random number generators
   CURAND_CALL( curandCreateGenerator( &mGen, CURAND_RNG_PSEUDO_DEFAULT));
-  ResetSeed();
+  mSeed = (unsigned long long) clock();
   mParStdDev = 0.0f;
 
   // Set debug flag

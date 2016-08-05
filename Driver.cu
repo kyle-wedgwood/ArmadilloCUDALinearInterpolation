@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <cstdlib>
 #include <cmath>
 #include <armadillo>
@@ -17,110 +18,91 @@ int main(int argc, char* argv[])
 
   // Instantiate problem
   unsigned int noReal = 1000;
-  EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
+  EventDrivenMap* p_problem = new EventDrivenMap(p_parameters,noReal);
+  p_problem->SetParameterStdDev(0.5);
 
   // Initial guess
-  arma::vec* p_solution_old = new arma::vec(noSpikes);
-  (*p_solution_old) << 0.3310f << 0.6914f << 1.3557f;
-
-  // Newton solver parameter list
-  NewtonSolver::ParameterList pars;
-  pars.tolerance = 1e-4;
-  pars.maxIterations = 10;
-  pars.printOutput = true;
-  pars.damping = 1.0;
-
-  // Instantiate newton solver (passing Jacobian)
-  NewtonSolver* p_newton_solver_1 = new NewtonSolver(p_event, p_solution_old, &pars);
-
-  // Instantiate newton solver (finite differences)
-  pars.finiteDifferenceEpsilon = 1e-2;
-
-  // Solve
-  arma::vec* p_solution_new = new arma::vec(noSpikes);
-  arma::vec* p_residual_history = new arma::vec(); // size assigned by Newton solver
-  AbstractNonlinearSolver::ExitFlagType exitFlag;
-  std::cout << "\n ******** Solve using finite differences" << std::endl;
-
-  // For computing eigenvalues
-  Stability* p_stability = new Stability(Stability::ProblemType::equationFree,p_event);
-  arma::mat* p_jacobian = new arma::mat(noSpikes,noSpikes);
-  arma::cx_vec* p_eigenvalues = new arma::cx_vec(noSpikes);
-  arma::vec* p_real_eigenvalues = new arma::vec(noSpikes);
-  int N_steps = 100;
-  int numUnstableEigenvalues;
+  arma::vec u0 = arma::vec(noSpikes);
+  u0 << 0.3310f << 0.6914f << 1.3557f;
+  arma::vec u1(u0);
 
   // For computing Jacobian via finite differences
-  arma::vec* p_f0 = new arma::vec(noSpikes);
-  arma::vec* p_f1 = new arma::vec(noSpikes);
+  arma::vec f0 = arma::vec(noSpikes);
+  arma::vec f1 = arma::vec(noSpikes);
+  arma::mat jac = arma::mat(noSpikes,noSpikes);
 
-  /* Now start testing */
-  arma::vec* p_test_sol = new arma::vec(noSpikes);
-  p_event->ComputeF(*p_solution_old,*p_test_sol);
+  // Vector of epsilons
+  unsigned int N_steps = 10;
 
-  // Try to find root
-  p_newton_solver_1->SetInitialGuess(p_solution_old);
-  //p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
+  double eps_max = log10(1.0e-2);
+  double eps_min = log10(1.0e-6);
+  double deps = (eps_max-eps_min)/(N_steps-1);
+  double epsilon = eps_min;
+  double matrix_action_norm;
 
-  printf("Homogeneous Solution = \n");
-  std::cout << *p_solution_new << std::endl;
+  // Test vector
+  arma::vec test_vec = arma::vec(noSpikes,arma::fill::randn);
+  test_vec = arma::normalise(test_vec);
 
-  printf("Setting NoThreads = 512\n");
-  p_event->SetNoThreads(512);
-  p_event->SetDebugFlag(1);
-  p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
+  arma::vec Jv = arma::vec(noSpikes);
 
-  printf("Homogeneous Solution = \n");
-  std::cout << *p_solution_new << std::endl;
+  // File to save data
+  std::ofstream file;
+  file.open("MatrixAction.dat");
+  file << "EPS" << "\t" << "JV" << "\r\n";
+  std::cout << std::setw(20)
+            << std::left
+            << "EPS"
+            << std::setw(20)
+            << std::left
+            << "JV"
+            << std::endl;
 
-  /*
-  float sigma = 1.0f;
-  p_event->SetParameterStdDev(sigma);
-  printf("Setting parameter standard deviation to %f\n",sigma);
+  // Calculate initial f
+  p_problem->ComputeF(u0,f0);
 
-  p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
-  printf("Heterogeneous Solution = \n");
-  std::cout << *p_solution_new << std::endl;
-  */
-
-  /*
   // Now loop over steps
   for (int i=0;i<N_steps;++i)
   {
-    p_newton_solver_1->SetInitialGuess(p_solution_old);
-    p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
+    epsilon = pow(10,epsilon);
+    u1 = u0;
 
-    numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues( *p_solution_new);
-    std::cout << "Number of unstable eigenvalues = " << numUnstableEigenvalues << std::endl;
-
-    if (numUnstableEigenvalues > 0)
+    // Construct Jacobian
+    for (int j=0;j<noSpikes;++j)
     {
-      std::cout << "Solution is unstable" << std::endl;
-    }
-    else if (numUnstableEigenvalues == 0)
-    {
-      std::cout << "Solution is stable" << std::endl;
+      if (j>0)
+      {
+        u1(j-1) = u0(j-1);
+      }
+      u1(j) += epsilon;
+      p_problem->ComputeF(u1,f1);
 
+      jac.col(j) = (f1-f0)*pow(epsilon,-1);
     }
+    // Restore final element of u
+    u1(noSpikes-1) = u0(noSpikes-1);
+
+    // Calculate Jacobian action
+    Jv = jac*test_vec;
+    //std::cout << Jv << std::endl;
+    matrix_action_norm = arma::norm(Jv,2);
+
+    // Save and display data
+    file << epsilon << "\t" << matrix_action_norm << "\r\n";
+    std::cout << std::setprecision(7)
+              << std::setw(20)
+              << epsilon
+              << std::setprecision(10)
+              << std::setw(20)
+              << matrix_action_norm << std::endl;
 
     // Prepare for next step
-    (*p_parameters) += 0.1;
-    p_event->SetParameters(0,(*p_parameters)[0]);
-    *p_solution_old = *p_solution_new;
-
+    epsilon = log10(epsilon);
+    epsilon += deps;
   }
 
   // Clean
-  */
+  file.close();
   delete p_parameters;
-  delete p_event;
-  /*
-  delete p_solution_old;
-  delete p_solution_new;
-  delete p_residual_history;
-  delete p_newton_solver_1;
-  delete p_eigenvalues;
-  delete p_real_eigenvalues;
-  delete p_stability;
-  */
+  delete p_problem;
 }
