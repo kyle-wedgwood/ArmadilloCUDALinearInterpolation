@@ -18,109 +18,62 @@ int main(int argc, char* argv[])
   // Instantiate problem
   unsigned int noReal = 1000;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
+  p_event->SetParameterStdDev(0.5);
 
   // Initial guess
   arma::vec* p_solution_old = new arma::vec(noSpikes);
   (*p_solution_old) << 0.3310f << 0.6914f << 1.3557f;
 
+  // Perturb solution
+  double sigma = 0.01;
+  arma::vec perturbation = arma::vec(noSpikes,arma::fill::randn);
+  perturbation = arma::normalise(perturbation,1);
+  (*p_solution_old) += sigma*perturbation;
+
   // Newton solver parameter list
   NewtonSolver::ParameterList pars;
-  pars.tolerance = 1e-4;
+  pars.tolerance = 0.0;
   pars.maxIterations = 10;
   pars.printOutput = true;
-  pars.damping = 1.0;
-
-  // Instantiate newton solver (passing Jacobian)
-  NewtonSolver* p_newton_solver_1 = new NewtonSolver(p_event, p_solution_old, &pars);
+  pars.damping = 0.2;
+  pars.finiteDifferenceEpsilon = 1e-3;
 
   // Instantiate newton solver (finite differences)
-  pars.finiteDifferenceEpsilon = 1e-2;
+  NewtonSolver* p_newton_solver = new NewtonSolver(p_event, p_solution_old, &pars);
 
   // Solve
   arma::vec* p_solution_new = new arma::vec(noSpikes);
   arma::vec* p_residual_history = new arma::vec(); // size assigned by Newton solver
   AbstractNonlinearSolver::ExitFlagType exitFlag;
-  std::cout << "\n ******** Solve using finite differences" << std::endl;
 
-  // For computing eigenvalues
-  Stability* p_stability = new Stability(Stability::ProblemType::equationFree,p_event);
-  arma::mat* p_jacobian = new arma::mat(noSpikes,noSpikes);
-  arma::cx_vec* p_eigenvalues = new arma::cx_vec(noSpikes);
-  arma::vec* p_real_eigenvalues = new arma::vec(noSpikes);
-  int N_steps = 100;
-  int numUnstableEigenvalues;
+  // Vary number of neurons (threads)
+  arma::vec noThreadsVector(3);
+  noThreadsVector << (1<<10) << (1<<9) << (1<<8);
 
-  // For computing Jacobian via finite differences
-  arma::vec* p_f0 = new arma::vec(noSpikes);
-  arma::vec* p_f1 = new arma::vec(noSpikes);
+  // Prepare Newton solver
+  p_newton_solver->SetInitialGuess(p_solution_old);
 
-  /* Now start testing */
-  arma::vec* p_test_sol = new arma::vec(noSpikes);
-  p_event->ComputeF(*p_solution_old,*p_test_sol);
+  // Matrix to store data
+  arma::mat* p_data = new arma::mat(pars.maxIterations+1,noThreadsVector.n_elem+1);
+  (*p_data).col(0) = arma::linspace(0,pars.maxIterations,pars.maxIterations+1);
 
-  // Try to find root
-  p_newton_solver_1->SetInitialGuess(p_solution_old);
-  //p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
-
-  printf("Homogeneous Solution = \n");
-  std::cout << *p_solution_new << std::endl;
-
-  printf("Setting NoThreads = 512\n");
-  p_event->SetNoThreads(512);
-  p_event->SetDebugFlag(1);
-  p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
-
-  printf("Homogeneous Solution = \n");
-  std::cout << *p_solution_new << std::endl;
-
-  /*
-  float sigma = 1.0f;
-  p_event->SetParameterStdDev(sigma);
-  printf("Setting parameter standard deviation to %f\n",sigma);
-
-  p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
-  printf("Heterogeneous Solution = \n");
-  std::cout << *p_solution_new << std::endl;
-  */
-
-  /*
   // Now loop over steps
-  for (int i=0;i<N_steps;++i)
+  for (int i=0;i<noThreadsVector.n_elem;++i)
   {
-    p_newton_solver_1->SetInitialGuess(p_solution_old);
-    p_newton_solver_1->Solve(*p_solution_new,*p_residual_history,exitFlag);
-
-    numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues( *p_solution_new);
-    std::cout << "Number of unstable eigenvalues = " << numUnstableEigenvalues << std::endl;
-
-    if (numUnstableEigenvalues > 0)
-    {
-      std::cout << "Solution is unstable" << std::endl;
-    }
-    else if (numUnstableEigenvalues == 0)
-    {
-      std::cout << "Solution is stable" << std::endl;
-
-    }
-
-    // Prepare for next step
-    (*p_parameters) += 0.1;
-    p_event->SetParameters(0,(*p_parameters)[0]);
-    *p_solution_old = *p_solution_new;
-
+    p_event->SetNoThreads(noThreadsVector(i));
+    p_newton_solver->Solve(*p_solution_new,*p_residual_history,exitFlag);
+    (*p_data).col(i+1) = *p_residual_history;
   }
 
+  // Save data
+  p_data->save("ResidualsVaryN.dat",arma::arma_ascii);
+
   // Clean
-  */
   delete p_parameters;
   delete p_event;
-  /*
   delete p_solution_old;
   delete p_solution_new;
   delete p_residual_history;
-  delete p_newton_solver_1;
-  delete p_eigenvalues;
-  delete p_real_eigenvalues;
-  delete p_stability;
-  */
+  delete p_newton_solver;
+  delete p_data;
 }
