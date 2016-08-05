@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
   // Perturb solution
   double sigma = 0.01;
   arma::vec perturbation = arma::vec(noSpikes,arma::fill::randn);
-  perturbation = arma::normalise(perturbation,2);
+  perturbation = arma::normalise(perturbation,1);
   (*p_solution_old) += sigma*perturbation;
 
   // Newton solver parameter list
