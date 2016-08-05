@@ -45,20 +45,16 @@ int main(int argc, char* argv[])
   arma::vec* p_residual_history = new arma::vec(); // size assigned by Newton solver
   AbstractNonlinearSolver::ExitFlagType exitFlag;
 
-  // For computing eigenvalues
+  // Vary number of realisations
   arma::vec noRealVector(3);
   noRealVector << 2000 << 1000 << 500;
 
-  /* Do a Newton solve */
+  // Prepare Newton solver
   p_newton_solver->SetInitialGuess(p_solution_old);
 
   // Matrix to store data
   arma::mat* p_data = new arma::mat(pars.maxIterations+1,noRealVector.n_elem+1);
   (*p_data).col(0) = arma::linspace(0,pars.maxIterations,pars.maxIterations+1);
-
-  // Save data
-  std::ofstream file;
-  file.open("ResidualVaryM.dat");
 
   // Now loop over steps
   for (int i=0;i<noRealVector.n_elem;++i)
@@ -69,10 +65,9 @@ int main(int argc, char* argv[])
   }
 
   // Save data
-  p_data->save("VaryM.dat",arma::arma_ascii);
+  p_data->save("ResidualsVaryM.dat",arma::arma_ascii);
 
   // Clean
-  file.close();
   delete p_parameters;
   delete p_event;
   delete p_solution_old;
