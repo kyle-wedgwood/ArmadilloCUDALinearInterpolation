@@ -50,6 +50,7 @@ int main(int argc, char* argv[])
   int N_steps = 100;
   int numUnstableEigenvalues = -1;
 
+  // Add some heterogeneity
   float sigma = 1.0f;
   p_event->SetParameterStdDev(sigma);
   printf("Setting parameter standard deviation to %f\n",sigma);
@@ -58,6 +59,8 @@ int main(int argc, char* argv[])
   arma::mat* p_data = new arma::mat(N_steps,noSpikes+4,arma::fill::zeros);
 
   // Now loop over steps
+  double ds = 0.1;
+
   for (int i=0;i<N_steps;++i)
   {
     p_newton_solver->SetInitialGuess(p_solution_old);
@@ -88,7 +91,7 @@ int main(int argc, char* argv[])
     }
 
     // Prepare for next step
-    (*p_parameters)(0) += 0.1;
+    (*p_parameters)(0) += ds;
     p_event->SetParameters(0,(*p_parameters)(0));
     *p_solution_old = *p_solution_new;
 
