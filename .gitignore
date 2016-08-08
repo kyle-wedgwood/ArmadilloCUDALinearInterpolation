@@ -8,6 +8,6 @@ MakefileAlt
 eventDrivenMapOld.cu
 DriverOld.cu
 EventDrivenMapJuly2016.cu
-.Apple/
+.AppleDouble/
 *.swp
 *.o
