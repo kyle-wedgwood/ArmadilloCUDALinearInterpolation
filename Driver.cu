@@ -19,7 +19,10 @@ int main(int argc, char* argv[])
   // Instantiate problem
   unsigned int noReal = 1000;
   EventDrivenMap* p_problem = new EventDrivenMap(p_parameters,noReal);
-  p_problem->SetParameterStdDev(0.5);
+  //p_problem->SetParameterStdDev(0.5);
+
+  // Switch on debugging
+  p_problem->SetDebugFlag(1);
 
   // Initial guess
   arma::vec u0 = arma::vec(noSpikes);
@@ -35,7 +38,7 @@ int main(int argc, char* argv[])
   unsigned int N_steps = 10;
 
   double eps_max = log10(1.0e-2);
-  double eps_min = log10(1.0e-6);
+  double eps_min = log10(1.0e-5);
   double deps = (eps_max-eps_min)/(N_steps-1);
   double epsilon = eps_min;
   double matrix_action_norm;
@@ -60,6 +63,8 @@ int main(int argc, char* argv[])
 
   // Calculate initial f
   p_problem->ComputeF(u0,f0);
+  printf("Zero'th fn.\n");
+  getchar();
 
   // Now loop over steps
   for (int i=0;i<N_steps;++i)
@@ -76,6 +81,8 @@ int main(int argc, char* argv[])
       }
       u1(j) += epsilon;
       p_problem->ComputeF(u1,f1);
+      printf("%d'th fn.\n",j+1);
+      getchar();
 
       jac.col(j) = (f1-f0)*pow(epsilon,-1);
     }

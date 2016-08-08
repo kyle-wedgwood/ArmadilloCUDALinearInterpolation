@@ -208,6 +208,10 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   realisationReductionKernelBlocks<<<noSpikes,mNoThreads>>>(
       mpDev_U, mpDev_lastSpikeTime, mNoReal);
   CUDA_CHECK_ERROR();
+  if (mDebugFlag)
+  {
+    SaveAveraged();
+  }
 
   // Copy data back to CPU
   fU.resize(noSpikes);
@@ -435,6 +439,16 @@ void EventDrivenMap::SaveRestrict()
   mpHost_averages = (float*) malloc( noSpikes*mNoReal*sizeof(float));
   cudaMemcpy( mpHost_averages, mpDev_lastSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost);
   SaveData( noSpikes*mNoReal,mpHost_averages,filename);
+  free(mpHost_averages);
+}
+
+void EventDrivenMap::SaveAveraged()
+{
+  char filename[] = "testAveraged.dat";
+  float* mpHost_averages;
+  mpHost_averages = (float*) malloc( noSpikes*sizeof(float));
+  cudaMemcpy( mpHost_averages, mpDev_U, noSpikes*sizeof(float), cudaMemcpyDeviceToHost);
+  SaveData( noSpikes,mpHost_averages,filename);
   free(mpHost_averages);
 }
 

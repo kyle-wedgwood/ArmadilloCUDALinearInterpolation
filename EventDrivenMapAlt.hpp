@@ -30,25 +30,20 @@ class EventDrivenMap:
     // Change number of realisations
     void SetNoRealisations( const int noReal);
 
-    void SetNoThreads( const int noThreads);
-
     // Set variance
     void SetParameterStdDev( const float sigma);
 
     // Set parameter
     void SetParameters( const unsigned int parId, const float parVal);
 
+    // Set storage for spikes
+    void SetStorageCapacity( const unsigned int storageCapacity);
+
     // Reset seed
     void ResetSeed();
 
-    // Post process data
-    void PostProcess();
-
-    // Toggle debug flag
-    void SetDebugFlag( const bool val);
-
     // Structure to store firing times and indices */
-    struct __align__(8) firing{
+    struct firing {
       float time;
       unsigned int index;
     };
@@ -64,6 +59,9 @@ class EventDrivenMap:
 
     // Float vector for parameters
     arma::fvec* mpHost_p;
+
+    // For testing porpoises
+    float* mpHostData;
 
     // Integration time
     float mFinalTime;
@@ -90,7 +88,6 @@ class EventDrivenMap:
     unsigned short *mpDev_crossedSpikeInd;
 
     curandGenerator_t mGen; // random number generator
-    unsigned long long mSeed; // seed for RNG
     float mParStdDev;
 
     // Functions to do lifting
@@ -101,19 +98,6 @@ class EventDrivenMap:
     void UtoZ( const arma::vec *U, arma::vec *Z);
 
     void BuildCouplingKernel();
-
-    // For debugging purposes
-    bool mDebugFlag;
-
-    void SaveInitialSpikeInd();
-
-    void SaveLift();
-
-    void SaveEvolve();
-
-    void SaveRestrict();
-
-    void SaveAveraged();
 };
 
 __global__ void LiftKernel( float *s, float *v, const float *par, const float *U,
@@ -130,15 +114,14 @@ __device__ float eventTime( float v0, float s0, float beta);
 __global__ void EvolveKernel( float *v, float *s, const float *beta,
     const float *w, const float finalTime, unsigned short *global_lastSpikeInd,
     float *global_lastFiringTime, unsigned short *global_crossedSpikeInd,
-    float *global_crossedFiringTime, unsigned int noReal);
+    float *global_crossedFiringTime);
 
 // restriction
 __global__ void RestrictKernel( float *global_lastSpikeTime,
                                 const unsigned short *global_lastSpikeInd,
-                                const float *global_crossedSpikeTime,
+                                const float *global_crossedSpikeTime
                                 const unsigned short *global_crossedSpikeInd,
-                                const float finalTime,
-                                const unsigned int noReal);
+                                const float finalTime);
 
 // averaging functions
 __global__ void realisationReductionKernelBlocks( float *dev_V,
@@ -146,13 +129,13 @@ __global__ void realisationReductionKernelBlocks( float *dev_V,
                                                   const unsigned int noReal);
 
 // helper functions
-__global__ void initialSpikeIndCopyKernel( unsigned short* pLastSpikeInd, const unsigned int noReal);
-
-void circshift( float *w, int shift, unsigned int noThreads);
-__device__ struct EventDrivenMap::firing warpReduceMin( struct EventDrivenMap::firing val);
-__device__ struct EventDrivenMap::firing blockReduceMin( struct EventDrivenMap::firing val);
+void circshift( float *w, int shift);
+__device__ struct EventDrivenMapMap::firing warpReduceMin( struct EventDrivenMapMap::firing val);
+__device__ struct EventDrivenMapMap::firing blockReduceMin( struct EventDrivenMapMap::firing val);
 __device__ float warpReduceSum ( float val);
 __device__ float blockReduceSum( float val);
+__device__ struct EventDrivenMap::averaging warpReduceSumSimultaneous( struct averaging val);
+__device__ struct EventDrivenMap::averaging blockReduceSumSimultaneous( struct EventDrivenMap::averaging val);
 
 void SaveData( int npts, float *x, char *filename);
 
