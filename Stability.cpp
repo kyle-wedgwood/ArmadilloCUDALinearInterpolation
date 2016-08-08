@@ -19,6 +19,10 @@ Stability::Stability( ProblemType type,
   mProblemType = type;
 }
 
+Stability::~Stability()
+{
+}
+
 int Stability::ComputeNumUnstableEigenvalues(const arma::vec& u)
 {
   // Find eigenvalues
@@ -72,6 +76,8 @@ arma::cx_vec Stability::ComputeEigenvalues(const arma::vec& u)
   return eig_gen(jacobian);
 
 }
+
+
 
 void Stability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
 {

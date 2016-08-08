@@ -51,8 +51,8 @@ int main(int argc, char* argv[])
   int numUnstableEigenvalues = -1;
 
   // Add some heterogeneity
-  float sigma = 1.0f;
-  p_event->SetParameterStdDev(sigma);
+  float sigma = 0.1f;
+  p_event->SetParameterStdDev(sigma*(*p_parameters)(0));
   printf("Setting parameter standard deviation to %f\n",sigma);
 
   // Save data
@@ -66,8 +66,8 @@ int main(int argc, char* argv[])
     p_newton_solver->SetInitialGuess(p_solution_old);
     p_newton_solver->Solve(*p_solution_new,*p_residual_history,exitFlag,p_jacobian);
 
-    numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues(*p_jacobian);
     /*
+    numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues(*p_jacobian);
     std::cout << "Number of unstable eigenvalues = " << numUnstableEigenvalues << std::endl;
 
     if (numUnstableEigenvalues > 0)
@@ -93,12 +93,12 @@ int main(int argc, char* argv[])
     // Prepare for next step
     (*p_parameters)(0) += ds;
     p_event->SetParameters(0,(*p_parameters)(0));
+    p_event->SetParameterStdDev(sigma*(*p_parameters)(0));
     *p_solution_old = *p_solution_new;
 
+    // Save data
+    p_data->save("branch.dat",arma::raw_ascii);
   }
-
-  // Save data
-  p_data->save("branch.dat",arma::raw_ascii);
 
   // Clean
   delete p_parameters;
