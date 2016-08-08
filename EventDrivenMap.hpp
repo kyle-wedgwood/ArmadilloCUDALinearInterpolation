@@ -112,6 +112,8 @@ class EventDrivenMap:
     void SaveEvolve();
 
     void SaveRestrict();
+
+    void SaveAveraged();
 };
 
 __global__ void LiftKernel( float *s, float *v, const float *par, const float *U,
