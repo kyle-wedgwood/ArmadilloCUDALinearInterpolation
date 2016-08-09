@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   (*p_parameters) << 13.0589f;
 
   // Instantiate problem
-  unsigned int noReal = 500;
+  unsigned int noReal = 1;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
 
   // Initial guess
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
   int numUnstableEigenvalues = -1;
 
   // Add some heterogeneity
-  float sigma = 0.1f;
+  float sigma = 0.0f;
   p_event->SetParameterStdDev(sigma*(*p_parameters)(0));
   printf("Setting parameter standard deviation to %f\n",sigma);
 
