@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   (*p_parameters) << 13.0589f;
 
   // Instantiate problem
-  unsigned int noReal = 1000;
+  unsigned int noReal = 1;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
 
   // Initial guess
@@ -25,10 +25,10 @@ int main(int argc, char* argv[])
 
   // Newton solver parameter list
   NewtonSolver::ParameterList pars;
-  pars.tolerance = 1e-4;
-  pars.maxIterations = 10;
+  pars.tolerance = 5e-4;
+  pars.maxIterations = 100;
   pars.printOutput = true;
-  pars.damping = 1.0;
+  pars.damping = 0.2;
 
   // Instantiate newton solver (passing Jacobian)
   NewtonSolver* p_newton_solver = new NewtonSolver(p_event, p_solution_old, &pars);
@@ -51,15 +51,16 @@ int main(int argc, char* argv[])
   int numUnstableEigenvalues = -1;
 
   // Add some heterogeneity
-  float sigma = 0.1f;
+  float sigma = 0.0f;
   p_event->SetParameterStdDev(sigma*(*p_parameters)(0));
   printf("Setting parameter standard deviation to %f\n",sigma);
 
   // Save data
-  arma::mat* p_data = new arma::mat(N_steps,noSpikes+4,arma::fill::zeros);
+  //arma::mat* p_data = new arma::mat(N_steps,noSpikes+4,arma::fill::zeros);
+  arma::mat* p_data = new arma::mat(0,noSpikes+4,arma::fill::zeros);
 
   // Now loop over steps
-  double ds = 0.1;
+  double ds = -0.2;
 
   for (int i=0;i<N_steps;++i)
   {
@@ -81,6 +82,7 @@ int main(int argc, char* argv[])
     */
 
     // Store data
+    p_data->resize(i+1,noSpikes+4);
     (*p_data)(i,0) = i;
     (*p_data)(i,1) = (*p_parameters)(0);
     (*p_data)(i,2) = arma::norm(*p_solution_new,2);
