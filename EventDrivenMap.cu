@@ -91,6 +91,7 @@ EventDrivenMap::EventDrivenMap(const arma::vec* pParameters, unsigned int noReal
         mNoReal*noSpikes*sizeof(unsigned short) ));
   CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeTime,
         mNoReal*noSpikes*sizeof(float) ));
+  CUDA_CALL( cudaMalloc( &mpDev_accept, mNoReal*sizeof(int) ));
 
   // Set up coupling kernel
   BuildCouplingKernel();
@@ -145,6 +146,7 @@ EventDrivenMap::~EventDrivenMap()
   cudaFree(mpDev_lastSpikeTime);
   cudaFree(mpDev_crossedSpikeInd);
   cudaFree(mpDev_crossedSpikeTime);
+  cudaFree(mpDev_accept);
 
   curandDestroyGenerator(mGen);
 }
@@ -187,9 +189,12 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   // Copy data to GPU
   //cudaMemcpy( dev_w, w, mNoThreads*sizeof(float), cudaMemcpyHostToDevice );
 
+  // Reset acceptance flags
+  CUDA_CALL( cudaMemset( mpDev_accept, 0, mNoReal*sizeof(int)));
+
   // Evolve
   EvolveKernel<<<mNoReal,mNoThreads>>>(mpDev_v,mpDev_s,mpDev_beta,mpDev_w,mFinalTime,mpDev_lastSpikeInd,mpDev_lastSpikeTime,
-      mpDev_crossedSpikeInd,mpDev_crossedSpikeTime,mNoReal);
+      mpDev_crossedSpikeInd,mpDev_crossedSpikeTime,mpDev_accept,mNoReal);
   CUDA_CHECK_ERROR();
   if (mDebugFlag)
   {
@@ -205,9 +210,22 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
     SaveRestrict();
   }
 
-  realisationReductionKernelBlocks<<<noSpikes,mNoThreads>>>(
-      mpDev_U, mpDev_lastSpikeTime, mNoReal);
+  // Count how many realisations to include
+  CountRealisationsKernel<<<(mNoReal+mNoThreads-1)/mNoThreads,mNoThreads>>>(
+      mpDev_accept, mNoReal);
   CUDA_CHECK_ERROR();
+  unsigned int mpHost_accept;
+  CUDA_CALL( cudaMemcpy( &mpHost_accept, mpDev_accept, sizeof(int), cudaMemcpyDeviceToHost));
+  std::cout << "Number accepted = " << mpHost_accept << std::endl;
+
+  // Now average
+  realisationReductionKernelBlocks<<<noSpikes,mNoThreads>>>(
+      mpDev_U, mpDev_lastSpikeTime, mNoReal, mpDev_accept);
+  CUDA_CHECK_ERROR();
+  if (mDebugFlag)
+  {
+    SaveAveraged();
+  }
 
   // Copy data back to CPU
   fU.resize(noSpikes);
@@ -424,8 +442,19 @@ void EventDrivenMap::SaveEvolve()
   }
   SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename3);
 
+  unsigned int* mpHost_accept;
+  mpHost_accept = (unsigned int*) malloc( noSpikes*mNoReal*sizeof(int));
+  CUDA_CALL( cudaMemcpy( mpHost_accept, mpDev_accept, mNoReal*sizeof(int), cudaMemcpyDeviceToHost));
+  for (int i=0;i<mNoReal;i++)
+  {
+    mpHost_spikeTime[i] = (float)mpHost_accept[i];
+  }
+  char filename5[] = "testAcceptFlag.dat";
+  SaveData(mNoReal,mpHost_spikeTime,filename5);
+
   free(mpHost_spikeInd);
   free(mpHost_spikeTime);
+  free(mpHost_accept);
 }
 
 void EventDrivenMap::SaveRestrict()
@@ -435,6 +464,16 @@ void EventDrivenMap::SaveRestrict()
   mpHost_averages = (float*) malloc( noSpikes*mNoReal*sizeof(float));
   cudaMemcpy( mpHost_averages, mpDev_lastSpikeTime, noSpikes*mNoReal*sizeof(float), cudaMemcpyDeviceToHost);
   SaveData( noSpikes*mNoReal,mpHost_averages,filename);
+  free(mpHost_averages);
+}
+
+void EventDrivenMap::SaveAveraged()
+{
+  char filename[] = "testAveraged.dat";
+  float* mpHost_averages;
+  mpHost_averages = (float*) malloc( noSpikes*sizeof(float));
+  cudaMemcpy( mpHost_averages, mpDev_U, noSpikes*sizeof(float), cudaMemcpyDeviceToHost);
+  SaveData( noSpikes,mpHost_averages,filename);
   free(mpHost_averages);
 }
 
@@ -490,26 +529,28 @@ __device__ float dfun( float t, float v, float s, float beta)
 __device__ float eventTime( float v0, float s0, float beta)
 {
   int decision;
+  unsigned int counter = 0;
   float f, df, estimatedTime = 0.0f;
   decision = (int) (v0>vth*pow(s0/(vth-I),1.0f/beta)+I*(1.0f-pow(s0/(vth-I),1.0f/beta))-(vth-I)/(beta-1.0f)*(s0/(vth-I)-pow(s0/(vth-I),1.0f/beta)));
 
   f  = fun( estimatedTime, v0, s0, beta)*decision;
   df = dfun( estimatedTime, v0, s0, beta);
 
-  while (abs(f)>tol) {
+  while ((abs(f)>tol) && (counter<counterMax)) {
     estimatedTime -= f/df;
     f  = fun( estimatedTime, v0, s0, beta);
     df = dfun( estimatedTime, v0, s0, beta);
+    counter++;
   }
 
-  return estimatedTime+100.0f*(1.0f-decision);
+  return fabs(estimatedTime)+100.0f*(1.0f-decision);
 
 }
 
 __global__ void EvolveKernel( float *v, float *s, const float *beta,
     const float *w, const float finalTime, unsigned short *global_lastSpikeInd,
     float *global_lastSpikeTime, unsigned short *global_crossedSpikeInd,
-    float *global_crossedSpikeTime, unsigned int noReal)
+    float *global_crossedSpikeTime, unsigned int *global_accept, unsigned int noReal)
 {
   __shared__ unsigned short local_lastSpikeInd[noSpikes];
   __shared__ unsigned short local_crossedSpikeInd[noSpikes];
@@ -532,7 +573,7 @@ __global__ void EvolveKernel( float *v, float *s, const float *beta,
       global_lastSpikeInd[threadIdx.x*noReal+blockIdx.x];
   }
   noCrossed = 0;
-  while (noCrossed<(1<<noSpikes)-1)
+  while ((noCrossed<(1<<noSpikes)-1) && (currentTime < 2*finalTime))
   {
     // find next firing times
     val.time  = eventTime(local_v,local_s,local_beta);
@@ -600,6 +641,10 @@ __global__ void EvolveKernel( float *v, float *s, const float *beta,
       local_crossedSpikeInd[threadIdx.x];
     global_crossedSpikeTime[blockIdx.x+threadIdx.x*noReal] =
       local_crossedSpikeTime[threadIdx.x];
+    if (noCrossed == (1<<noSpikes)-1)
+    {
+      global_accept[blockIdx.x] = 1;
+    }
   }
 }
 
@@ -714,9 +759,28 @@ __global__ void RestrictKernel( float *global_lastSpikeTime,
   }
 }
 
+__global__ void CountRealisationsKernel( unsigned int *accept,
+                                         const unsigned int noReal)
+{
+  int i;
+  unsigned int index;
+  unsigned int noLoad = (noReal+blockDim.x-1)/blockDim.x;
+  int sum = 0;
+
+  for (i=0;i<noLoad;i++) {
+    index = threadIdx.x+i*blockDim.x;
+    sum += (index < noReal) ? accept[index] : 0;
+  }
+  sum = blockReduceSumInt( sum);
+  if (threadIdx.x==0) {
+    accept[0] = sum;
+  }
+}
+
 __global__ void realisationReductionKernelBlocks( float *V,
                                                   const float *U,
-                                                  const unsigned int noReal)
+                                                  const unsigned int noReal,
+                                                  const unsigned int *accept)
 {
   unsigned int i, spikeNo = blockIdx.x;
   unsigned int index;
@@ -725,12 +789,12 @@ __global__ void realisationReductionKernelBlocks( float *V,
 
   for (i=0;i<noLoad;i++) {
     index = threadIdx.x+i*blockDim.x;
-    average += (index < noReal) ? U[index+spikeNo*noReal] : 0.0f;
+    average += ((index < noReal) && (accept[index]==1)) ? U[index+spikeNo*noReal] : 0.0f;
     //average += (index < noReal) ? U[noSpikes*index+spikeNo] : 0.0f;
   }
   average = blockReduceSum( average);
   if (threadIdx.x==0) {
-    V[spikeNo] = average/noReal;
+    V[spikeNo] = average/accept[0];
   }
 }
 
@@ -825,4 +889,32 @@ void SaveData( int npts, float *x, char *filename) {
     fprintf(fp,"%f\n",x[i]);
   }
   fclose(fp);
+}
+
+__device__ int warpReduceSumInt( int val) {
+  for (int offset = warpSize/2; offset>0; offset/=2) {
+    val += __shfl_down( val, offset);
+  }
+  return val;
+}
+
+__device__ int blockReduceSumInt( int val) {
+  __shared__ int shared[32];
+  int lane = threadIdx.x % warpSize;
+  int wid  = threadIdx.x / warpSize;
+
+  val = warpReduceSum( val);
+
+  if (lane==0) {
+    shared[wid] = val;
+  }
+  __syncthreads();
+
+  val = (threadIdx.x<blockDim.x/warpSize) ? shared[lane] : 0.0f;
+
+  if (wid==0) {
+    val = warpReduceSum( val);
+  }
+
+  return val;
 }
