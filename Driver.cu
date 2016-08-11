@@ -40,12 +40,15 @@ int main(int argc, char* argv[])
   double eps_max = log10(1.0e-2);
   double eps_min = log10(1.0e-5);
   double deps = (eps_max-eps_min)/(N_steps-1);
-  double epsilon = eps_min;
+  double epsilon = eps_max;
   double matrix_action_norm;
 
   // Test vector
   arma::vec test_vec = arma::vec(noSpikes,arma::fill::randn);
   test_vec = arma::normalise(test_vec);
+
+  // Comparison with Frechet derivative
+  arma::vec comparison
 
   arma::vec Jv = arma::vec(noSpikes);
 
@@ -90,7 +93,13 @@ int main(int argc, char* argv[])
     u1(noSpikes-1) = u0(noSpikes-1);
 
     // Calculate Jacobian action
-    Jv = jac*test_vec;
+    Jv = epsilon*jac*test_vec;
+
+    // Check that Jacobian is a good match for derivative
+    u1 = u0+epsilon*test_vec;
+    p_problem->ComputeF(u1,f1);
+
+
     //std::cout << Jv << std::endl;
     matrix_action_norm = arma::norm(Jv,2);
 
@@ -105,7 +114,7 @@ int main(int argc, char* argv[])
 
     // Prepare for next step
     epsilon = log10(epsilon);
-    epsilon += deps;
+    epsilon -= deps;
   }
 
   // Clean
