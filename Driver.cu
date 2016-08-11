@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   (*p_parameters) << 13.0589f;
 
   // Instantiate problem
-  unsigned int noReal = 1;
+  unsigned int noReal = 1000;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
 
   // Initial guess
@@ -51,16 +51,17 @@ int main(int argc, char* argv[])
   int numUnstableEigenvalues = -1;
 
   // Add some heterogeneity
-  float sigma = 0.0f;
+  float sigma = 0.1f;
   p_event->SetParameterStdDev(sigma*(*p_parameters)(0));
   printf("Setting parameter standard deviation to %f\n",sigma);
+  p_event->SetDebugFlag(1);
 
   // Save data
   //arma::mat* p_data = new arma::mat(N_steps,noSpikes+4,arma::fill::zeros);
   arma::mat* p_data = new arma::mat(0,noSpikes+4,arma::fill::zeros);
 
   // Now loop over steps
-  double ds = -0.2;
+  double ds = 0.2;
 
   for (int i=0;i<N_steps;++i)
   {

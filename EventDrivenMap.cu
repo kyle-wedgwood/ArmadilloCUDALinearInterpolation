@@ -91,7 +91,7 @@ EventDrivenMap::EventDrivenMap(const arma::vec* pParameters, unsigned int noReal
         mNoReal*noSpikes*sizeof(unsigned short) ));
   CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeTime,
         mNoReal*noSpikes*sizeof(float) ));
-  CUDA_CALL( cudaMalloc( &mpDev_accept, mNoReal*sizeof(bool) ));
+  CUDA_CALL( cudaMalloc( &mpDev_accept, mNoReal*sizeof(int) ));
 
   // Set up coupling kernel
   BuildCouplingKernel();
@@ -189,6 +189,9 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   // Copy data to GPU
   //cudaMemcpy( dev_w, w, mNoThreads*sizeof(float), cudaMemcpyHostToDevice );
 
+  // Reset acceptance flags
+  CUDA_CALL( cudaMemset( mpDev_accept, 0, mNoReal*sizeof(int)));
+
   // Evolve
   EvolveKernel<<<mNoReal,mNoThreads>>>(mpDev_v,mpDev_s,mpDev_beta,mpDev_w,mFinalTime,mpDev_lastSpikeInd,mpDev_lastSpikeTime,
       mpDev_crossedSpikeInd,mpDev_crossedSpikeTime,mpDev_accept,mNoReal);
@@ -211,6 +214,9 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   CountRealisationsKernel<<<(mNoReal+mNoThreads-1)/mNoThreads,mNoThreads>>>(
       mpDev_accept, mNoReal);
   CUDA_CHECK_ERROR();
+  unsigned int mpHost_accept;
+  CUDA_CALL( cudaMemcpy( &mpHost_accept, mpDev_accept, sizeof(int), cudaMemcpyDeviceToHost));
+  std::cout << "Number accepted = " << mpHost_accept << std::endl;
 
   // Now average
   realisationReductionKernelBlocks<<<noSpikes,mNoThreads>>>(
@@ -436,8 +442,19 @@ void EventDrivenMap::SaveEvolve()
   }
   SaveData(noSpikes*mNoReal,mpHost_spikeTime,filename3);
 
+  unsigned int* mpHost_accept;
+  mpHost_accept = (unsigned int*) malloc( noSpikes*mNoReal*sizeof(int));
+  CUDA_CALL( cudaMemcpy( mpHost_accept, mpDev_accept, mNoReal*sizeof(int), cudaMemcpyDeviceToHost));
+  for (int i=0;i<mNoReal;i++)
+  {
+    mpHost_spikeTime[i] = (float)mpHost_accept[i];
+  }
+  char filename5[] = "testAcceptFlag.dat";
+  SaveData(mNoReal,mpHost_spikeTime,filename5);
+
   free(mpHost_spikeInd);
   free(mpHost_spikeTime);
+  free(mpHost_accept);
 }
 
 void EventDrivenMap::SaveRestrict()
@@ -512,26 +529,28 @@ __device__ float dfun( float t, float v, float s, float beta)
 __device__ float eventTime( float v0, float s0, float beta)
 {
   int decision;
+  unsigned int counter = 0;
   float f, df, estimatedTime = 0.0f;
   decision = (int) (v0>vth*pow(s0/(vth-I),1.0f/beta)+I*(1.0f-pow(s0/(vth-I),1.0f/beta))-(vth-I)/(beta-1.0f)*(s0/(vth-I)-pow(s0/(vth-I),1.0f/beta)));
 
   f  = fun( estimatedTime, v0, s0, beta)*decision;
   df = dfun( estimatedTime, v0, s0, beta);
 
-  while (abs(f)>tol) {
+  while ((abs(f)>tol) && (counter<counterMax)) {
     estimatedTime -= f/df;
     f  = fun( estimatedTime, v0, s0, beta);
     df = dfun( estimatedTime, v0, s0, beta);
+    counter++;
   }
 
-  return estimatedTime+100.0f*(1.0f-decision);
+  return fabs(estimatedTime)+100.0f*(1.0f-decision);
 
 }
 
 __global__ void EvolveKernel( float *v, float *s, const float *beta,
     const float *w, const float finalTime, unsigned short *global_lastSpikeInd,
     float *global_lastSpikeTime, unsigned short *global_crossedSpikeInd,
-    float *global_crossedSpikeTime, bool *global_accept, unsigned int noReal)
+    float *global_crossedSpikeTime, unsigned int *global_accept, unsigned int noReal)
 {
   __shared__ unsigned short local_lastSpikeInd[noSpikes];
   __shared__ unsigned short local_crossedSpikeInd[noSpikes];
@@ -740,7 +759,7 @@ __global__ void RestrictKernel( float *global_lastSpikeTime,
   }
 }
 
-__global__ void CountRealisationsKernel( bool *accept,
+__global__ void CountRealisationsKernel( unsigned int *accept,
                                          const unsigned int noReal)
 {
   int i;
@@ -761,7 +780,7 @@ __global__ void CountRealisationsKernel( bool *accept,
 __global__ void realisationReductionKernelBlocks( float *V,
                                                   const float *U,
                                                   const unsigned int noReal,
-                                                  const bool *accept)
+                                                  const unsigned int *accept)
 {
   unsigned int i, spikeNo = blockIdx.x;
   unsigned int index;
