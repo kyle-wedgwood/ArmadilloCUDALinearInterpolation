@@ -19,7 +19,7 @@ int main(int argc, char* argv[])
   // Instantiate problem
   unsigned int noReal = 1000;
   EventDrivenMap* p_problem = new EventDrivenMap(p_parameters,noReal);
-  //p_problem->SetParameterStdDev(0.5);
+  p_problem->SetParameterStdDev(0.05);
 
   // Switch on debugging
   p_problem->SetDebugFlag(1);
@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
   arma::mat jac = arma::mat(noSpikes,noSpikes);
 
   // Vector of epsilons
-  unsigned int N_steps = 10;
+  unsigned int N_steps = 100;
 
   double eps_max = log10(1.0e-2);
   double eps_min = log10(1.0e-5);
@@ -49,6 +49,7 @@ int main(int argc, char* argv[])
 
   // Comparison with Frechet derivative
   arma::vec comparison = arma::vec(noSpikes);
+  double comparison_norm;
 
   arma::vec Jv = arma::vec(noSpikes);
 
@@ -62,12 +63,15 @@ int main(int argc, char* argv[])
             << std::setw(20)
             << std::left
             << "JV"
+            << std::setw(25)
+            << std::left
+            << "Comparison norm"
             << std::endl;
 
   // Calculate initial f
   p_problem->ComputeF(u0,f0);
-  printf("Zero'th fn.\n");
-  getchar();
+  //printf("Zero'th fn.\n");
+  //getchar();
 
   // Now loop over steps
   for (int i=0;i<N_steps;++i)
@@ -84,8 +88,8 @@ int main(int argc, char* argv[])
       }
       u1(j) += epsilon;
       p_problem->ComputeF(u1,f1);
-      printf("%d'th fn.\n",j+1);
-      getchar();
+      //printf("%d'th fn.\n",j+1);
+      //getchar();
 
       jac.col(j) = (f1-f0)*pow(epsilon,-1);
     }
@@ -100,19 +104,23 @@ int main(int argc, char* argv[])
     p_problem->ComputeF(u1,f1);
 
     comparison = f1-f0-epsilon*jac*test_vec;
-    std::cout << "Comparison vector norm = " << arma::norm(comparison) << std::endl;
+    comparison_norm = arma::norm(comparison);
 
     //std::cout << Jv << std::endl;
     matrix_action_norm = arma::norm(Jv,2);
 
     // Save and display data
-    file << epsilon << "\t" << matrix_action_norm << "\r\n";
+    file << epsilon << "\t" << matrix_action_norm << "\t" << comparison_norm << "\r\n";
     std::cout << std::setprecision(7)
               << std::setw(20)
               << epsilon
               << std::setprecision(10)
               << std::setw(20)
-              << matrix_action_norm << std::endl;
+              << matrix_action_norm
+              << std::setprecision(10)
+              << std::setw(25)
+              << comparison_norm
+              << std::endl;
 
     // Prepare for next step
     epsilon = log10(epsilon);
