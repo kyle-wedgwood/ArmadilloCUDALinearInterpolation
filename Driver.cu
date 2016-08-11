@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
     p_problem->ComputeF(u1,f1);
 
     comparison = f1-f0-epsilon*jac*test_vec;
-    std::cout << "Comparison vector norm" << arma::norm(comparison) << std::endl;
+    std::cout << "Comparison vector norm = " << arma::norm(comparison) << std::endl;
 
     //std::cout << Jv << std::endl;
     matrix_action_norm = arma::norm(Jv,2);
