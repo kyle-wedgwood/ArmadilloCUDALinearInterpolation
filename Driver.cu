@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
   p_problem->SetParameterStdDev(0.05);
 
   // Switch on debugging
-  p_problem->SetDebugFlag(1);
+  p_problem->SetDebugFlag(0);
 
   // Initial guess
   arma::vec u0 = arma::vec(noSpikes);
@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
   // File to save data
   std::ofstream file;
   file.open("MatrixAction.dat");
-  file << "EPS" << "\t" << "JV" << "\r\n";
+  file << "EPS" << "\t" << "JV" << "\t" << "COMPNORM" << "\r\n";
   std::cout << std::setw(20)
             << std::left
             << "EPS"
