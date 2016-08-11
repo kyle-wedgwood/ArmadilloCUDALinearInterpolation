@@ -622,7 +622,7 @@ __global__ void EvolveKernel( float *v, float *s, const float *beta,
       local_crossedSpikeInd[threadIdx.x];
     global_crossedSpikeTime[blockIdx.x+threadIdx.x*noReal] =
       local_crossedSpikeTime[threadIdx.x];
-    if (noCrossed = (1<<noSpikes)-1)
+    if (noCrossed == (1<<noSpikes)-1)
     {
       global_accept[blockIdx.x] = 1;
     }
