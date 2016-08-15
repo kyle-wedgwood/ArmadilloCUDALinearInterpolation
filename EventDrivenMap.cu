@@ -214,9 +214,11 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   CountRealisationsKernel<<<(mNoReal+mNoThreads-1)/mNoThreads,mNoThreads>>>(
       mpDev_accept, mNoReal);
   CUDA_CHECK_ERROR();
+  /*
   unsigned int mpHost_accept;
   CUDA_CALL( cudaMemcpy( &mpHost_accept, mpDev_accept, sizeof(int), cudaMemcpyDeviceToHost));
   std::cout << "Number accepted = " << mpHost_accept << std::endl;
+  */
 
   // Now average
   realisationReductionKernelBlocks<<<noSpikes,mNoThreads>>>(
@@ -241,6 +243,7 @@ void EventDrivenMap::SetTimeHorizon( const float T)
 {
   assert(T>0);
   mFinalTime = T;
+  std::cout << "Time horizon set to " << mFinalTime << std::endl;
 }
 
 void EventDrivenMap::SetNoRealisations( const int noReal)
@@ -257,6 +260,7 @@ void EventDrivenMap::SetNoRealisations( const int noReal)
   cudaFree( mpDev_lastSpikeTime);
   cudaFree( mpDev_crossedSpikeInd);
   cudaFree( mpDev_crossedSpikeTime);
+  cudaFree( mpDev_accept);
 
   // Then reallocate
   CUDA_CALL( cudaMalloc( &mpDev_beta, mNoReal*mNoThreads*sizeof(float) ));
@@ -270,6 +274,9 @@ void EventDrivenMap::SetNoRealisations( const int noReal)
         mNoReal*noSpikes*sizeof(unsigned short) ));
   CUDA_CALL( cudaMalloc( &mpDev_crossedSpikeTime,
         mNoReal*noSpikes*sizeof(float) ));
+  CUDA_CALL( cudaMalloc( &mpDev_accept,
+        mNoReal*sizeof(int) ));
+  std::cout << "Number of realisations set to " << mNoReal << std::endl;
 }
 
 void EventDrivenMap::SetNoThreads( const int noThreads)
@@ -303,12 +310,15 @@ void EventDrivenMap::SetNoThreads( const int noThreads)
 
   // Rebuild coupling kernel
   BuildCouplingKernel();
+
+  std::cout << "Number of threads set to " << mNoThreads << std::endl;
 }
 
 void EventDrivenMap::SetParameterStdDev( const float sigma)
 {
   assert(sigma>=0);
   mParStdDev = sigma;
+  std::cout << "Parameter standard deviation set to " << mParStdDev << std::endl;
 }
 
 void EventDrivenMap::SetParameters( const unsigned int parId, const float parVal)
@@ -316,6 +326,7 @@ void EventDrivenMap::SetParameters( const unsigned int parId, const float parVal
   assert(parId<=(*mpHost_p).n_elem);
   (*mpHost_p)[parId] = parVal;
   CUDA_CALL( cudaMemcpy(mpDev_p+parId,&parVal,sizeof(float),cudaMemcpyHostToDevice));
+  std::cout << "Parameter value set to " << parVal << std::endl;
 }
 
 void EventDrivenMap::ResetSeed()
@@ -323,14 +334,28 @@ void EventDrivenMap::ResetSeed()
   CURAND_CALL( curandSetPseudoRandomGeneratorSeed( mGen, mSeed));
 }
 
-void EventDrivenMap::PostProcess()
+void EventDrivenMap::SetNewSeed()
 {
   mSeed = (unsigned long long) clock();
+  std::cout << "New seed set" << std::endl;
+}
+
+void EventDrivenMap::PostProcess()
+{
+  SetNewSeed();
 }
 
 void EventDrivenMap::SetDebugFlag( const bool val)
 {
   mDebugFlag = val;
+  if (mDebugFlag)
+  {
+    std::cout << "Debugging on" << std::endl;
+  }
+  else
+  {
+    std::cout << "Debugging off" << std::endl;
+  }
 }
 
 void EventDrivenMap::initialSpikeInd( const arma::vec& U)

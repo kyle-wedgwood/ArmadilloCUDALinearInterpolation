@@ -41,6 +41,9 @@ class EventDrivenMap:
     // Reset seed
     void ResetSeed();
 
+    // Set new seed
+    void SetNewSeed();
+
     // Post process data
     void PostProcess();
 
