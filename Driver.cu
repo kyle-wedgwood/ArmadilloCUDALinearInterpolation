@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   (*p_parameters) << 13.0589f;
 
   // Instantiate problem
-  unsigned int noReal = 1000;
+  unsigned int noReal = 2000;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
   p_event->SetParameterStdDev(0.5);
 
@@ -33,10 +33,10 @@ int main(int argc, char* argv[])
   // Newton solver parameter list
   NewtonSolver::ParameterList pars;
   pars.tolerance = 0.0;
-  pars.maxIterations = 10;
+  pars.maxIterations = 50;
   pars.printOutput = true;
   pars.damping = 0.2;
-  pars.finiteDifferenceEpsilon = 1e-3;
+  pars.finiteDifferenceEpsilon = 1e-2;
 
   // Instantiate newton solver (finite differences)
   NewtonSolver* p_newton_solver = new NewtonSolver(p_event, p_solution_old, &pars);
@@ -47,8 +47,8 @@ int main(int argc, char* argv[])
   AbstractNonlinearSolver::ExitFlagType exitFlag;
 
   // Vary number of neurons (threads)
-  arma::vec noThreadsVector(3);
-  noThreadsVector << (1<<10) << (1<<9) << (1<<8);
+  arma::vec noThreadsVector(1);
+  noThreadsVector << 512;
 
   // Prepare Newton solver
   p_newton_solver->SetInitialGuess(p_solution_old);
@@ -63,10 +63,10 @@ int main(int argc, char* argv[])
     p_event->SetNoThreads(noThreadsVector(i));
     p_newton_solver->Solve(*p_solution_new,*p_residual_history,exitFlag);
     (*p_data).col(i+1) = *p_residual_history;
-  }
 
-  // Save data
-  p_data->save("ResidualsVaryN.dat",arma::arma_ascii);
+    // Save data
+    p_data->save("ResidualsVaryN.dat",arma::raw_ascii);
+  }
 
   // Clean
   delete p_parameters;

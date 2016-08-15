@@ -282,7 +282,7 @@ void EventDrivenMap::SetNoRealisations( const int noReal)
 void EventDrivenMap::SetNoThreads( const int noThreads)
 {
   assert(noThreads>0);
-  assert(noThreads<1024);
+  assert(noThreads<=1024);
   mNoThreads = noThreads;
   mNoBlocks  = (mNoReal+mNoThreads-1)/mNoThreads;
 

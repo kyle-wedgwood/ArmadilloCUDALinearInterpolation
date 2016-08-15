@@ -13,3 +13,6 @@
 
 // Time horizon
 #define timeHorizon 5.0f
+
+// Maximum number of iterations for finding spike times
+#define counterMax 100
