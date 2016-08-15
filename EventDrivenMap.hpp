@@ -41,6 +41,9 @@ class EventDrivenMap:
     // Reset seed
     void ResetSeed();
 
+    // Set new seed
+    void SetNewSeed();
+
     // Post process data
     void PostProcess();
 
@@ -88,6 +91,7 @@ class EventDrivenMap:
     float *mpDev_crossedSpikeTime;
     unsigned short *mpDev_lastSpikeInd;
     unsigned short *mpDev_crossedSpikeInd;
+    unsigned int *mpDev_accept;
 
     curandGenerator_t mGen; // random number generator
     unsigned long long mSeed; // seed for RNG
@@ -112,6 +116,8 @@ class EventDrivenMap:
     void SaveEvolve();
 
     void SaveRestrict();
+
+    void SaveAveraged();
 };
 
 __global__ void LiftKernel( float *s, float *v, const float *par, const float *U,
@@ -128,7 +134,7 @@ __device__ float eventTime( float v0, float s0, float beta);
 __global__ void EvolveKernel( float *v, float *s, const float *beta,
     const float *w, const float finalTime, unsigned short *global_lastSpikeInd,
     float *global_lastFiringTime, unsigned short *global_crossedSpikeInd,
-    float *global_crossedFiringTime, unsigned int noReal);
+    float *global_crossedFiringTime, unsigned int *global_accept, unsigned int noReal);
 
 // restriction
 __global__ void RestrictKernel( float *global_lastSpikeTime,
@@ -138,10 +144,14 @@ __global__ void RestrictKernel( float *global_lastSpikeTime,
                                 const float finalTime,
                                 const unsigned int noReal);
 
+// count number of active realisations
+__global__ void CountRealisationsKernel( unsigned int *accept, const unsigned int noReal);
+
 // averaging functions
 __global__ void realisationReductionKernelBlocks( float *dev_V,
                                                   const float *dev_U,
-                                                  const unsigned int noReal);
+                                                  const unsigned int noReal,
+                                                  const unsigned int *accept);
 
 // helper functions
 __global__ void initialSpikeIndCopyKernel( unsigned short* pLastSpikeInd, const unsigned int noReal);
@@ -151,6 +161,8 @@ __device__ struct EventDrivenMap::firing warpReduceMin( struct EventDrivenMap::f
 __device__ struct EventDrivenMap::firing blockReduceMin( struct EventDrivenMap::firing val);
 __device__ float warpReduceSum ( float val);
 __device__ float blockReduceSum( float val);
+__device__ int warpReduceSumInt ( int val);
+__device__ int blockReduceSumInt( int val);
 
 void SaveData( int npts, float *x, char *filename);
 
