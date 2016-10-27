@@ -27,16 +27,20 @@ class Stability
 
     ~Stability();
 
+    int ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues);
+
     int ComputeNumUnstableEigenvalues(const arma::vec& u);
 
-    int ComputeNumUnstableEigenvalues(const arma::mat& jacobian);
+    int ComputeNumUnstableEigenvalues(arma::mat& jacobian);
+
+    arma::cx_vec ComputeEigenvalues(const arma::vec& u);
+
+    arma::cx_vec ComputeEigenvalues(arma::mat& jacobian);
 
   private:
 
     // Hiding default constructor
     Stability();
-
-    arma::cx_vec ComputeEigenvalues(const arma::vec& u);
 
     // Compute Jacobian via finite differences
     void ComputeDFDU(const arma::vec& u, arma::mat& jacobian);

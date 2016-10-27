@@ -23,6 +23,18 @@ Stability::~Stability()
 {
 }
 
+int Stability::ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues)
+{
+  if (mProblemType == ProblemType::flow)
+  {
+    return accu(arma::real(eigenvalues)>0.0);
+  }
+  else
+  {
+    return accu(abs(eigenvalues)>1.0);
+  }
+}
+
 int Stability::ComputeNumUnstableEigenvalues(const arma::vec& u)
 {
   // Find eigenvalues
@@ -38,9 +50,15 @@ int Stability::ComputeNumUnstableEigenvalues(const arma::vec& u)
   }
 }
 
-int Stability::ComputeNumUnstableEigenvalues( const arma::mat& jacobian)
+int Stability::ComputeNumUnstableEigenvalues( arma::mat& jacobian)
 {
-  // Find eigenvalues
+  int problem_size = jacobian.n_rows;
+
+  if (mProblemType == ProblemType::equationFree)
+  {
+    jacobian *= (-1);
+    jacobian += arma::mat(problem_size,problem_size,arma::fill::eye);
+  }
   arma::cx_vec eigenvalues = eig_gen(jacobian);
 
   if (mProblemType == ProblemType::flow)
@@ -71,13 +89,24 @@ arma::cx_vec Stability::ComputeEigenvalues(const arma::vec& u)
 
   if (mProblemType == ProblemType::equationFree)
   {
+    jacobian *= (-1);
     jacobian += arma::mat(problem_size,problem_size,arma::fill::eye);
   }
   return eig_gen(jacobian);
-
 }
 
+arma::cx_vec Stability::ComputeEigenvalues( arma::mat& jacobian)
+{
+  // Problem size
+  int problem_size = jacobian.n_rows;
 
+  if (mProblemType == ProblemType::equationFree)
+  {
+    jacobian *= (-1);
+    jacobian += arma::mat(problem_size,problem_size,arma::fill::eye);
+  }
+  return eig_gen(jacobian);
+}
 
 void Stability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
 {

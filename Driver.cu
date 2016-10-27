@@ -57,19 +57,19 @@ int main(int argc, char* argv[])
   p_event->SetDebugFlag(1);
 
   // Save data
-  //arma::mat* p_data = new arma::mat(N_steps,noSpikes+4,arma::fill::zeros);
   arma::mat* p_data = new arma::mat(0,noSpikes+4,arma::fill::zeros);
 
   // Now loop over steps
-  double ds = 0.2;
+  double ds = -0.2;
 
   for (int i=0;i<N_steps;++i)
   {
     p_newton_solver->SetInitialGuess(p_solution_old);
     p_newton_solver->Solve(*p_solution_new,*p_residual_history,exitFlag,p_jacobian);
 
-    /*
-    numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues(*p_jacobian);
+    *p_eigenvalues = p_stability->ComputeEigenvalues(*p_jacobian);
+    numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues(*p_eigenvalues);
+    std::cout << "Eigenvalues are" << *p_eigenvalues << std::endl;
     std::cout << "Number of unstable eigenvalues = " << numUnstableEigenvalues << std::endl;
 
     if (numUnstableEigenvalues > 0)
@@ -80,7 +80,6 @@ int main(int argc, char* argv[])
     {
       std::cout << "Solution is stable" << std::endl;
     }
-    */
 
     // Store data
     p_data->resize(i+1,noSpikes+4);
