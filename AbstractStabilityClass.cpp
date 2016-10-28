@@ -1,29 +1,25 @@
-#include "Stability.hpp"
 #include <armadillo>
 #include "AbstractNonlinearProblem.hpp"
 #include "AbstractNonlinearProblemJacobian.hpp"
+#include "AbstractStabilityClass.hpp"
 
-Stability::Stability( ProblemType type, AbstractNonlinearProblem *pProblem)
+AbstractStability::AbstractStability( ProblemType type, AbstractNonlinearProblem *pProblem)
 {
-  mpProblem = pProblem;
+  mpProblem         = pProblem;
   mpProblemJacobian = NULL;
-  mProblemType = type;
+  mProblemType      = type;
 }
 
-Stability::Stability( ProblemType type,
-                      AbstractNonlinearProblem *pProblem,
-                      AbstractNonlinearProblemJacobian *pProblemJacobian)
+AbstractStability::AbstractStability( ProblemType type,
+                                      AbstractNonlinearProblem *pProblem,
+                                      AbstractNonlinearProblemJacobian *pProblemJacobian)
 {
   mpProblem         = pProblem;
   mpProblemJacobian = pProblemJacobian;
-  mProblemType = type;
+  mProblemType      = type;
 }
 
-Stability::~Stability()
-{
-}
-
-int Stability::ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues)
+int AbstractStability::ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues)
 {
   if (mProblemType == ProblemType::flow)
   {
@@ -35,7 +31,7 @@ int Stability::ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues)
   }
 }
 
-int Stability::ComputeNumUnstableEigenvalues(const arma::vec& u)
+int AbstractStability::ComputeNumUnstableEigenvalues(const arma::vec& u)
 {
   // Find eigenvalues
   arma::cx_vec eigenvalues = ComputeEigenvalues(u);
@@ -50,7 +46,7 @@ int Stability::ComputeNumUnstableEigenvalues(const arma::vec& u)
   }
 }
 
-int Stability::ComputeNumUnstableEigenvalues( arma::mat& jacobian)
+int AbstractStability::ComputeNumUnstableEigenvalues( arma::mat& jacobian)
 {
   int problem_size = jacobian.n_rows;
 
@@ -71,7 +67,7 @@ int Stability::ComputeNumUnstableEigenvalues( arma::mat& jacobian)
   }
 }
 
-arma::cx_vec Stability::ComputeEigenvalues(const arma::vec& u)
+arma::cx_vec AbstractStability::ComputeEigenvalues(const arma::vec& u)
 {
   // Problem size
   int problem_size = u.n_rows;
@@ -95,7 +91,7 @@ arma::cx_vec Stability::ComputeEigenvalues(const arma::vec& u)
   return eig_gen(jacobian);
 }
 
-arma::cx_vec Stability::ComputeEigenvalues( arma::mat& jacobian)
+arma::cx_vec AbstractStability::ComputeEigenvalues( arma::mat& jacobian)
 {
   // Problem size
   int problem_size = jacobian.n_rows;
@@ -108,7 +104,7 @@ arma::cx_vec Stability::ComputeEigenvalues( arma::mat& jacobian)
   return eig_gen(jacobian);
 }
 
-void Stability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
+void AbstractStability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
 {
 
   // Perturbed solution
@@ -142,5 +138,4 @@ void Stability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
     // Assign jacobian column
     jacobian.col(i) = (df - f) * pow(epsilon,-1);
   }
-
 }

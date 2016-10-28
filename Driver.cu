@@ -4,7 +4,8 @@
 #include <armadillo>
 
 #include "NewtonSolver.hpp"
-#include "Stability.hpp"
+#include "AbstractNonlinearSolver.hpp"
+#include "EventStability.hpp"
 #include "EventDrivenMap.hpp"
 #include "parameters.hpp"
 
@@ -43,7 +44,7 @@ int main(int argc, char* argv[])
   std::cout << "\n ******** Solve using finite differences" << std::endl;
 
   // For computing eigenvalues
-  Stability* p_stability = new Stability(Stability::ProblemType::equationFree,p_event);
+  EventStability* p_stability = new EventStability(AbstractStability::ProblemType::equationFree,p_event);
   arma::mat* p_jacobian = new arma::mat(noSpikes,noSpikes);
   arma::cx_vec* p_eigenvalues = new arma::cx_vec(noSpikes);
   arma::vec* p_real_eigenvalues = new arma::vec(noSpikes);

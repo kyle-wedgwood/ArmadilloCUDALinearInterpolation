@@ -151,7 +151,16 @@ EventDrivenMap::~EventDrivenMap()
   curandDestroyGenerator(mGen);
 }
 
-void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
+void EventDrivenMap::ComputeF( const arma::vec& Z,
+                               arma::vec& f)
+{
+  arma::vec ZTilde = arma::vec(noSpikes,arma::fill::zeros);
+  ComputeF( Z, f, Ztilde);
+}
+
+void EventDrivenMap::ComputeF( const arma::vec& Z,
+                               arma::vec& f,
+                               const arma::vec& ZTilde)
 {
 
   arma::vec U0(noSpikes+1);
@@ -166,7 +175,7 @@ void EventDrivenMap::ComputeF(const arma::vec& Z, arma::vec& f)
   }
 
   // Then, put vector in correct form
-  ZtoU(Z,U0);
+  ZtoU(Z,U0,ZTilde);
 
   // Then, typecast data as floats
   fU = arma::conv_to<arma::fvec>::from(U0);
@@ -385,13 +394,16 @@ __global__ void initialSpikeIndCopyKernel( unsigned short* pLastSpikeInd, const 
   }
 }
 
-void EventDrivenMap::ZtoU( const arma::vec& Z, arma::vec& U)
+void EventDrivenMap::ZtoU( const arma::vec& Z,
+                           arma::vec& U,
+                           const arma::vec& Ztilde)
 {
   assert(U.n_elem==Z.n_elem+1);
+
   U[0] = Z[0];
-  U[1] = 0.0;
+  U[1] = Ztilde[0];
   for (int i=2;i<=noSpikes;i++) {
-    U[i] = Z[i-1];
+    U[i] = Z[i-1]+Ztilde[i-1];
   }
 }
 

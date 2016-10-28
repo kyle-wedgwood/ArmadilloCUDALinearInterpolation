@@ -5,7 +5,7 @@
 #include "AbstractNonlinearProblem.hpp"
 #include "AbstractNonlinearProblemJacobian.hpp"
 
-class Stability
+class AbstractStability
 {
   public:
 
@@ -18,14 +18,14 @@ class Stability
     };
 
     // Constructor (Jacobian computed by finite differences explicitly)
-    Stability( ProblemType type, AbstractNonlinearProblem* pProblem);
+    AbstractStability( ProblemType type, AbstractNonlinearProblem* pProblem);
 
     // Constructor (Jacobian passed by user)
-    Stability( ProblemType type,
-               AbstractNonlinearProblem* pProblem,
-               AbstractNonlinearProblemJacobian *pProblemJacobian);
+    AbstractStability( ProblemType type,
+                       AbstractNonlinearProblem* pProblem,
+                       AbstractNonlinearProblemJacobian *pProblemJacobian);
 
-    ~Stability();
+    ~AbstractStability();
 
     int ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues);
 
@@ -40,10 +40,10 @@ class Stability
   private:
 
     // Hiding default constructor
-    Stability();
+    AbstractStability();
 
     // Compute Jacobian via finite differences
-    void ComputeDFDU(const arma::vec& u, arma::mat& jacobian);
+    virtual void ComputeDFDU(const arma::vec& u, arma::mat& jacobian);
 
     // Problem interface
     AbstractNonlinearProblem* mpProblem;

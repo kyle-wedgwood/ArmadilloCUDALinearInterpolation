@@ -23,6 +23,9 @@ class EventDrivenMap:
     // Right-hand side
     void ComputeF( const arma::vec& u, arma::vec& f);
 
+    // Overload function to accept utilde
+    void ComputeF( const arma::vec& u, arma::vec& f, const arma::& uTilde);
+
     // Equation-free stuff
     void SetTimeHorizon( const float T);
 
@@ -100,7 +103,9 @@ class EventDrivenMap:
     // Functions to do lifting
     void initialSpikeInd( const arma::vec& U);
 
-    void ZtoU( const arma::vec& Z, arma::vec& U);
+    void ZtoU( const arma::vec& Z,
+               arma::vec& U,
+               const arma::vec& Ztilde);
 
     void UtoZ( const arma::vec *U, arma::vec *Z);
 

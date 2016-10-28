@@ -8,11 +8,12 @@ INC = -I. -c -I/usr/local/include
 
 OBJS = Driver.o \
        EventDrivenMap.o \
+			 EventStability.o \
        AbstractNonlinearProblem.o \
        AbstractNonlinearProblemJacobian.o \
        AbstractNonlinearSolver.o \
+			 AbstractStabilityClass.o \
        NewtonSolver.o \
-			 Stability.o \
        ConvergenceCriterion.o \
 
 all: $(OBJS)
