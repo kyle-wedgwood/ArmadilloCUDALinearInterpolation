@@ -10,6 +10,10 @@ class AbstractNonlinearProblem
 
     virtual void ComputeF( const arma::vec& u, arma::vec& f) = 0;
 
+    virtual void ComputeF( const arma::vec& u,
+                           arma::vec& f,
+                           const arma::vec& uTilde) {};
+
     virtual void PostProcess() {};
 };
 

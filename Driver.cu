@@ -5,6 +5,7 @@
 
 #include "NewtonSolver.hpp"
 #include "AbstractNonlinearSolver.hpp"
+#include "AbstractStabilityClass.hpp"
 #include "EventStability.hpp"
 #include "EventDrivenMap.hpp"
 #include "parameters.hpp"
@@ -17,7 +18,7 @@ int main(int argc, char* argv[])
   (*p_parameters) << 13.0589f;
 
   // Instantiate problem
-  unsigned int noReal = 1000;
+  unsigned int noReal = 1;
   EventDrivenMap* p_event = new EventDrivenMap(p_parameters,noReal);
 
   // Initial guess
@@ -45,6 +46,7 @@ int main(int argc, char* argv[])
 
   // For computing eigenvalues
   EventStability* p_stability = new EventStability(AbstractStability::ProblemType::equationFree,p_event);
+  p_stability->SetFiniteDiffEpsilon(1e-3);
   arma::mat* p_jacobian = new arma::mat(noSpikes,noSpikes);
   arma::cx_vec* p_eigenvalues = new arma::cx_vec(noSpikes);
   arma::vec* p_real_eigenvalues = new arma::vec(noSpikes);
@@ -52,7 +54,7 @@ int main(int argc, char* argv[])
   int numUnstableEigenvalues = -1;
 
   // Add some heterogeneity
-  float sigma = 0.1f;
+  float sigma = 0.0f;
   p_event->SetParameterStdDev(sigma*(*p_parameters)(0));
   printf("Setting parameter standard deviation to %f\n",sigma);
   p_event->SetDebugFlag(1);
@@ -68,9 +70,9 @@ int main(int argc, char* argv[])
     p_newton_solver->SetInitialGuess(p_solution_old);
     p_newton_solver->Solve(*p_solution_new,*p_residual_history,exitFlag,p_jacobian);
 
-    *p_eigenvalues = p_stability->ComputeEigenvalues(*p_jacobian);
+    *p_eigenvalues = p_stability->ComputeEigenvalues(*p_solution_new);
     numUnstableEigenvalues = p_stability->ComputeNumUnstableEigenvalues(*p_eigenvalues);
-    std::cout << "Eigenvalues are" << *p_eigenvalues << std::endl;
+    std::cout << "Eigenvalues are" << std::endl << *p_eigenvalues << std::endl;
     std::cout << "Number of unstable eigenvalues = " << numUnstableEigenvalues << std::endl;
 
     if (numUnstableEigenvalues > 0)

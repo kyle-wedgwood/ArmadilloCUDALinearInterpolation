@@ -155,7 +155,7 @@ void EventDrivenMap::ComputeF( const arma::vec& Z,
                                arma::vec& f)
 {
   arma::vec ZTilde = arma::vec(noSpikes,arma::fill::zeros);
-  ComputeF( Z, f, Ztilde);
+  ComputeF( Z, f, ZTilde);
 }
 
 void EventDrivenMap::ComputeF( const arma::vec& Z,

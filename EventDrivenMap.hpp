@@ -24,7 +24,7 @@ class EventDrivenMap:
     void ComputeF( const arma::vec& u, arma::vec& f);
 
     // Overload function to accept utilde
-    void ComputeF( const arma::vec& u, arma::vec& f, const arma::& uTilde);
+    void ComputeF( const arma::vec& u, arma::vec& f, const arma::vec& uTilde);
 
     // Equation-free stuff
     void SetTimeHorizon( const float T);

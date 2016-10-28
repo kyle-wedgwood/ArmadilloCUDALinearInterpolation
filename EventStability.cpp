@@ -1,3 +1,6 @@
+#include <iostream>
+#include <iomanip>
+#include <armadillo>
 #include "EventStability.hpp"
 
 void EventStability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
@@ -34,4 +37,5 @@ void EventStability::ComputeDFDU(const arma::vec& u, arma::mat& jacobian)
     // Assign jacobian column
     jacobian.col(i) = (df - f) * pow(epsilon,-1);
   }
+
 }

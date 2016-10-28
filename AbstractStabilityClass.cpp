@@ -11,12 +11,17 @@ AbstractStability::AbstractStability( ProblemType type, AbstractNonlinearProblem
 }
 
 AbstractStability::AbstractStability( ProblemType type,
-                                      AbstractNonlinearProblem *pProblem,
-                                      AbstractNonlinearProblemJacobian *pProblemJacobian)
+                                      AbstractNonlinearProblem* pProblem,
+                                      AbstractNonlinearProblemJacobian* pProblemJacobian)
 {
   mpProblem         = pProblem;
   mpProblemJacobian = pProblemJacobian;
   mProblemType      = type;
+}
+
+void AbstractStability::SetFiniteDiffEpsilon( double val)
+{
+  mFiniteDifferenceEpsilon = val;
 }
 
 int AbstractStability::ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues)

@@ -25,7 +25,7 @@ class AbstractStability
                        AbstractNonlinearProblem* pProblem,
                        AbstractNonlinearProblemJacobian *pProblemJacobian);
 
-    ~AbstractStability();
+    void SetFiniteDiffEpsilon( double val);
 
     int ComputeNumUnstableEigenvalues(const arma::cx_vec& eigenvalues);
 
@@ -37,13 +37,7 @@ class AbstractStability
 
     arma::cx_vec ComputeEigenvalues(arma::mat& jacobian);
 
-  private:
-
-    // Hiding default constructor
-    AbstractStability();
-
-    // Compute Jacobian via finite differences
-    virtual void ComputeDFDU(const arma::vec& u, arma::mat& jacobian);
+  protected:
 
     // Problem interface
     AbstractNonlinearProblem* mpProblem;
@@ -52,6 +46,14 @@ class AbstractStability
 
     // Other parameters
     double mFiniteDifferenceEpsilon;
+
+  private:
+
+    // Hiding default constructor
+    AbstractStability();
+
+    // Compute Jacobian via finite differences
+    virtual void ComputeDFDU(const arma::vec& u, arma::mat& jacobian);
 
 };
 
