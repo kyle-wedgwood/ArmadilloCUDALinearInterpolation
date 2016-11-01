@@ -90,7 +90,7 @@ arma::cx_vec AbstractStability::ComputeEigenvalues(const arma::vec& u)
 
   if (mProblemType == ProblemType::equationFree)
   {
-    jacobian *= (-1);
+    jacobian *= (-1.0/u(0));
     jacobian += arma::mat(problem_size,problem_size,arma::fill::eye);
   }
   return eig_gen(jacobian);

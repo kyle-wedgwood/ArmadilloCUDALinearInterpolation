@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
   // Newton solver parameter list
   NewtonSolver::ParameterList pars;
-  pars.tolerance = 5e-4;
+  pars.tolerance = 1e-5;
   pars.maxIterations = 100;
   pars.printOutput = true;
   pars.damping = 0.2;
@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
   NewtonSolver* p_newton_solver = new NewtonSolver(p_event, p_solution_old, &pars);
 
   // Instantiate newton solver (finite differences)
-  pars.finiteDifferenceEpsilon = 1e-2;
+  pars.finiteDifferenceEpsilon = 1e-3;
 
   // Solve
   arma::vec* p_solution_new = new arma::vec(noSpikes);
@@ -63,7 +63,31 @@ int main(int argc, char* argv[])
   arma::mat* p_data = new arma::mat(0,noSpikes+4,arma::fill::zeros);
 
   // Now loop over steps
-  double ds = -0.2;
+  double ds = 0.2;
+
+  // DO PERTURBATION TEST
+  arma::vec f      = arma::vec(noSpikes);
+  arma::vec Ztilde = arma::vec(noSpikes,arma::fill::randn);
+  Ztilde = 0.01*arma::normalise(Ztilde);
+
+  p_newton_solver->SetInitialGuess(p_solution_old);
+  p_newton_solver->Solve(*p_solution_new,*p_residual_history,exitFlag,p_jacobian);
+
+  std::cout << "Solution is " << std::endl << *p_solution_new << std::endl;
+
+  p_event->SetDebugFlag(1);
+  p_event->ComputeF(*p_solution_new,f);
+
+  std::cout << "Unperturbed run complete" << std::endl;
+  std::cout << "Perturbing vector by amount" << std::endl;
+  std::cout << Ztilde << std::endl;
+  getchar();
+
+  p_event->ComputeF(*p_solution_new,f,Ztilde);
+  std::cout << "Perturbed run complete" << std::endl;
+  getchar();
+
+  // TEST FINISHED
 
   for (int i=0;i<N_steps;++i)
   {
