@@ -165,7 +165,6 @@ void EventDrivenMap::ComputeF( const arma::vec& Z,
 
   arma::vec U0(noSpikes+1);
   arma::vec UT(noSpikes);
-  arma::fvec fU(noSpikes+1);
 
   // First generate initial spike indices
   initialSpikeInd( Z);
@@ -177,11 +176,8 @@ void EventDrivenMap::ComputeF( const arma::vec& Z,
   // Then, put vector in correct form
   ZtoU(Z,U0,ZTilde);
 
-  // Then, typecast data as doubles
-  fU = arma::conv_to<arma::fvec>::from(U0);
-
   // Assuming that weight kernel does not change
-  CUDA_CALL( cudaMemcpy(mpDev_U,fU.begin(),(noSpikes+1)*sizeof(double),cudaMemcpyHostToDevice));
+  CUDA_CALL( cudaMemcpy(mpDev_U,U0.begin(),(noSpikes+1)*sizeof(double),cudaMemcpyHostToDevice));
 
   // Introduce parameters heterogeneity
   ResetSeed();
@@ -239,12 +235,9 @@ void EventDrivenMap::ComputeF( const arma::vec& Z,
   }
 
   // Copy data back to CPU
-  fU.resize(noSpikes);
-  CUDA_CALL( cudaMemcpy( fU.begin(), mpDev_U, noSpikes*sizeof(double), cudaMemcpyDeviceToHost ));
+  CUDA_CALL( cudaMemcpy( UT.begin(), mpDev_U, noSpikes*sizeof(double), cudaMemcpyDeviceToHost ));
 
   // Compute F
-  UT = arma::conv_to<arma::vec>::from(fU);
-
   f = -U0[0]*U0.rows(1,noSpikes) - UT + U0[0]*mFinalTime;
 }
 
@@ -594,15 +587,23 @@ __global__ void EvolveKernel( double *v, double *s, const double *beta,
   __shared__ double local_lastSpikeTime[noSpikes];
   __shared__ double local_crossedSpikeTime[noSpikes];
   __shared__ unsigned int noCrossed;
+  __shared__ double shared_v[blockDim.x*neuronsPerThread];
+  __shared__ double shared_s[blockDim.x*neuronsPerThread];
+  __shared__ double shared_beta[blockDim.x*neuronsPerThread];
   double currentTime = 0.0f;
   double local_v, local_s, local_beta;
   unsigned short minIndex;
   struct EventDrivenMap::firing val;
+  int i;
+  double spike_time;
 
   // load values from global memory
-  local_v = v[threadIdx.x+blockIdx.x*blockDim.x];
-  local_s = s[threadIdx.x+blockIdx.x*blockDim.x];
-  local_beta = beta[threadIdx.x+blockIdx.x*blockDim.x];
+  for (i=0;i<neuronsPerThread;++i)
+  {
+    shared_v[i*blockDim.x+threadIdx.x]    = v[threadIdx.x+blockIdx.x*blockDim.x];
+    shared_s[i*blockDim.x+threadIdx.x]    = s[threadIdx.x+blockIdx.x*blockDim.x];
+    shared_beta[i*blockDim.x+threadIdx.x] = beta[threadIdx.x+blockIdx.x*blockDim.x];
+  }
 
   if (threadIdx.x<noSpikes)
   {
@@ -612,21 +613,48 @@ __global__ void EvolveKernel( double *v, double *s, const double *beta,
   noCrossed = 0;
   while ((noCrossed<(1<<noSpikes)-1) && (currentTime < 2*finalTime))
   {
-    // find next firing times
-    val.time  = eventTime(local_v,local_s,local_beta);
-    val.index = threadIdx.x;
+    val.time = 100.0;
+
+    // Load from shared memory
+    for (i=0;i<neuronsPerThread;++i)
+    {
+      local_v    = shared_v[i*blockDim.x+threadIdx.x];
+      local_s    = shared_s[i*blockDim.x+threadIdx.x];
+      local_beta = shared_beta[i*blockDim.x+threadIdx.x];
+
+      spike_time = eventTime(local_v,local_s,local_beta);
+      if (spike_time<val.time)
+      {
+        val.time  = spike_time;
+        val.index = i*blockDim.x+threadIdx.x;
+      }
+    }
 
     // perform reduction to find minimum spike time
     val = blockReduceMin( val);
 
     // val now contains minimum spike time and index
     // update values to spike time
-    local_v *= exp(-val.time);
-    local_v +=
-      I*(1.0f-exp(-val.time))+local_s*exp(-val.time)/(1.0f-local_beta)*(exp((1.0f-local_beta)*val.time)-1.0f);
-    local_v *= (threadIdx.x!=val.index);
-    local_s *= exp(-local_beta*val.time);
-    local_s += local_beta*w[(threadIdx.x-val.index)*(threadIdx.x>=val.index)+(val.index-threadIdx.x)*(threadIdx.x<val.index)];
+    for (i=neuronsPerThread-1;i>=0;--i)
+    {
+      local_v *= exp(-val.time);
+      local_v +=
+        I*(1.0f-exp(-val.time))+local_s*exp(-val.time)/(1.0f-local_beta)*(exp((1.0f-local_beta)*val.time)-1.0f);
+      local_v *= (threadIdx.x!=val.index);
+      local_s *= exp(-local_beta*val.time);
+      local_s += local_beta*w[(threadIdx.x-val.index)*(threadIdx.x>=val.index)+(val.index-threadIdx.x)*(threadIdx.x<val.index)];
+
+      shared_v[i*blockDim.x+threadIdx.x] = local_v;
+      shared_s[i*blockDim.x+threadIdx.x] = local_s;
+      shared_beta[i*blockDim.x+threadIdx.x] = local_beta;
+
+      if (i>0)
+      {
+        local_v    = shared_v[(i-1)*blockDim.x+threadIdx.x];
+        local_s    = shared_s[(i-1)*blockDim.x+threadIdx.x];
+        local_beta = shared_beta[(i-1)*blockDim.x+threadIdx.x];
+      }
+    }
 
     currentTime += val.time;
 
@@ -635,7 +663,7 @@ __global__ void EvolveKernel( double *v, double *s, const double *beta,
     {
       // First calculate which crossing spike belongs to
       minIndex = 0;
-      for (int i=1;i<noSpikes;i++)
+      for (i=1;i<noSpikes;i++)
       {
         minIndex += ((std::abs((int)(val.index-local_lastSpikeInd[i])))<(std::abs((int)(val.index-local_lastSpikeInd[minIndex]))));
       }

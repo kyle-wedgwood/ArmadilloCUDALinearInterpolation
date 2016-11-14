@@ -47,9 +47,9 @@ int main(int argc, char* argv[])
   // For computing eigenvalues
   EventStability* p_stability = new EventStability(AbstractStability::ProblemType::equationFree,p_event);
   p_stability->SetFiniteDiffEpsilon(1e-3);
-  arma::mat* p_jacobian = new arma::mat(noSpikes,noSpikes);
-  arma::cx_vec* p_eigenvalues = new arma::cx_vec(noSpikes);
-  arma::vec* p_real_eigenvalues = new arma::vec(noSpikes);
+  arma::mat* p_jacobian = new arma::mat(noSpikes-1,noSpikes-1);
+  arma::cx_vec* p_eigenvalues = new arma::cx_vec(noSpikes-1);
+  arma::vec* p_real_eigenvalues = new arma::vec(noSpikes-1);
   int N_steps = 100;
   int numUnstableEigenvalues = -1;
 
@@ -65,6 +65,7 @@ int main(int argc, char* argv[])
   // Now loop over steps
   double ds = 0.2;
 
+  /*
   // DO PERTURBATION TEST
   arma::vec f      = arma::vec(noSpikes);
   arma::vec Ztilde = arma::vec(noSpikes,arma::fill::randn);
@@ -86,6 +87,7 @@ int main(int argc, char* argv[])
   p_event->ComputeF(*p_solution_new,f,Ztilde);
   std::cout << "Perturbed run complete" << std::endl;
   getchar();
+  */
 
   // TEST FINISHED
 

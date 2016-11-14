@@ -152,15 +152,17 @@ EventDrivenMap::~EventDrivenMap()
 }
 
 void EventDrivenMap::ComputeF( const arma::vec& Z,
-                               arma::vec& f)
+                               arma::vec& f,
+                               const bool truncated)
 {
   arma::vec ZTilde = arma::vec(noSpikes,arma::fill::zeros);
-  ComputeF( Z, f, ZTilde);
+  ComputeF( Z, f, ZTilde, truncated);
 }
 
 void EventDrivenMap::ComputeF( const arma::vec& Z,
                                arma::vec& f,
-                               const arma::vec& ZTilde)
+                               const arma::vec& ZTilde,
+                               const bool truncated)
 {
 
   arma::vec U0(noSpikes+1);
@@ -245,7 +247,14 @@ void EventDrivenMap::ComputeF( const arma::vec& Z,
   // Compute F
   UT = arma::conv_to<arma::vec>::from(fU);
 
-  f = -U0[0]*U0.rows(1,noSpikes) - UT + U0[0]*mFinalTime;
+  if (truncated)
+  {
+    f = diff(UT);
+  }
+  else
+  {
+    f = -U0[0]*U0.rows(1,noSpikes) - UT + U0[0]*mFinalTime;
+  }
 }
 
 void EventDrivenMap::SetTimeHorizon( const float T)
